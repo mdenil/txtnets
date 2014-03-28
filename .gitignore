@@ -1,0 +1,9 @@
+env/
+.pkgs/
+.idea/
+cnn-sm-gpu-kmax
+*~
+*.iml
+*.bak
+*.pyc
+*.swp
