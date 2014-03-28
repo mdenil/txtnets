@@ -18,24 +18,20 @@ class WordEmbedding(object):
         self.output_axes = ['b', 'w', 'd']
 
     def fprop(self, X):
-        """X is a matrix of indexes into the vocabulary.  It has shape batch_size x sentence_length.
-         One row per sentence, words in the sentence run from left to right.
-
-        Returns: A batch_size x sentence_length x embedding_dimension matrix of word embeddings"""
-
-        batch_size, sentence_length = X.shape
+        b, w = X.shape
 
         # ravel() unwinds in C order, (row major).  The result is each sentence appears consecutavely.
         # There is one word per row, and sentence are stacked vertically.
-        embeddings = self.E[X.ravel()]
+        X = self.E[X.ravel()]
 
-        return np.reshape(embeddings, (batch_size, sentence_length, self.dimension))
+        return np.reshape(X, (b, w, self.dimension))
 
     def __repr__(self):
         return "{}(dim={}, vocab_size={})".format(
             self.__class__.__name__,
             self.dimension,
             self.vocabulary_size)
+
 
 class SentenceConvolution(object):
     def __init__(self,
@@ -50,23 +46,21 @@ class SentenceConvolution(object):
 
         self.W = 0.05 * np.random.standard_normal(size=(self.n_feature_maps * self.n_input_dimensions, self.kernel_width))
 
-        self.input_axes = ['b', 'w', 'd']
+        self.input_axes = ['b', 'd', 'w']
         self.output_axes = ['b', 'f', 'd', 'w']
 
     def fprop(self, X):
-        batch_size, sentence_length, n_input_dimensions = X.shape
+        b, d, w = X.shape
 
-        assert self.n_input_dimensions == n_input_dimensions
+        assert self.n_input_dimensions == d
+        f = self.n_feature_maps
 
         X = np.reshape(
             np.transpose(
-                np.reshape(
-                    np.hstack([X]*self.n_feature_maps),
-                    (batch_size, sentence_length, self.n_feature_maps, self.n_input_dimensions)
-                ),
-                (1,0,2,3)
+                np.concatenate([X[np.newaxis]] * f), # f b d w
+                (1, 0, 2, 3)
             ),
-            (batch_size * self.n_feature_maps * self.n_input_dimensions, sentence_length)
+            (b * f * d, w)
         )
 
         # This part is probably wrong, the shapes are right though
@@ -76,42 +70,40 @@ class SentenceConvolution(object):
 
         K_padding_size = X.shape[1] - self.kernel_width
         K = np.hstack([self.W, np.zeros((self.W.shape[0], K_padding_size))])
-        K = np.vstack([K]*batch_size)
+        K = np.vstack([K] * b)
 
         X = scipy.fftpack.fft(X, axis=1)
         K = scipy.fftpack.fft(K, axis=1)
 
-        representation_length = sentence_length + self.kernel_width - 1
+        X = scipy.fftpack.ifft(X*K)
+
+        representation_length = w + self.kernel_width - 1
 
         return np.reshape(
-            scipy.fftpack.ifft(X*K),
-            (batch_size, self.n_feature_maps, self.n_input_dimensions, representation_length))
+            X,
+            (b, f, d, representation_length))
 
     def __repr__(self):
         return "{}(W={})".format(
             self.__class__.__name__,
             self.W.shape)
 
+
 class SumFolding(object):
     def __init__(self):
-        self.input_axes = ['b', 'f', 'd', 'w']
+        self.input_axes = ['d', 'b', 'f', 'w']
         self.output_axes = ['d', 'b', 'f', 'w']
 
     def fprop(self, X):
-        batch_size, n_feature_maps, n_input_dimensions, representation_length = X.shape
+        d, b, f, w = X.shape
 
-        X = np.reshape(
-            np.transpose(X, (3, 0, 1, 2)),
-            (n_input_dimensions, batch_size * n_feature_maps * representation_length)
-        )
-
-        assert ( n_input_dimensions % 2 == 0 )
-        folded_size = n_input_dimensions / 2
+        assert ( d % 2 == 0 )
+        folded_size = d / 2
 
         X = X[:folded_size] + X[folded_size:]
 
         X = np.reshape(
-            X, (folded_size, batch_size, n_feature_maps, representation_length)
+            X, (folded_size, b, f, w)
         )
 
         return X
@@ -124,27 +116,28 @@ class KMaxPooling(object):
     def __init__(self, k):
         self.k = k
         self.input_axes = ['d', 'b', 'f', 'w']
-        self.output_axes = ['w', 'd', 'b', 'f']
+        self.output_axes = ['d', 'b', 'f', 'w']
 
     def fprop(self, X):
-        folded_size, batch_size, n_feature_maps, representation_length = X.shape
+        d, b, f, w = X.shape
 
-        X = np.reshape(X, (folded_size * batch_size * n_feature_maps, representation_length))
+        X = np.reshape(
+            X,
+            (d * b * f, w)
+        )
 
         k_max_indexes = np.argsort(X, axis=1)
         k_max_indexes = k_max_indexes[:,-self.k:]
         k_max_indexes.sort(axis=1)
 
-        rows = np.vstack([np.arange(folded_size * batch_size * n_feature_maps)] * self.k).T
+        rows = np.vstack([np.arange(d * b * f)] * self.k).T
 
         X = X[rows, k_max_indexes]
 
         X = np.reshape(
             X,
-            (folded_size, batch_size, n_feature_maps, self.k)
+            (d, b, f, self.k)
         )
-
-        X = np.transpose(X, (3,0,1,2)) # FIXME: remove this
 
         return X
 
@@ -160,16 +153,14 @@ class Bias(object):
 
         self.b = np.zeros((n_input_dims, n_feature_maps))
 
-        self.input_axes = ['w', 'd', 'b', 'f']
-        self.output_axes = ['d', 'b', 'w', 'f']
+        self.input_axes = ['b', 'w', 'd', 'f']
+        self.output_axes = ['b', 'w', 'd', 'f']
 
     def fprop(self, X):
-        n_input_dims, folded_size, batch_size, n_feature_maps = X.shape
+        b, w, d, f = X.shape
 
-        assert self.n_input_dims == n_input_dims
-        assert self.n_feature_maps == n_feature_maps
-
-        X = np.transpose(X, (1, 2, 0, 3))
+        assert self.n_input_dims == d
+        assert self.n_feature_maps == f
 
         X += self.b
 
@@ -183,8 +174,8 @@ class Bias(object):
 
 class Relu(object):
     def __init__(self):
-        self.input_axes = ['b', 'f', 'w', 'd']
-        self.output_axes = ['b', 'f', 'w', 'd']
+        self.input_axes = ['b', 'w', 'f', 'd']
+        self.output_axes = ['b', 'w', 'f', 'd']
 
     def fprop(self, X):
         return np.maximum(0, X)
@@ -220,13 +211,17 @@ class CSM(object):
         d: n_input_dimensions, index over dimensions of the input in the non-sentence direction
 
         """
-        print "Permuting {} -> {}".format(current_axes, desired_axes)
-        return np.transpose(
-            X,
-            [current_axes.index(d) for d in desired_axes])
+        if current_axes == desired_axes:
+            return X
+        else:
+            return np.transpose(
+                X,
+                [current_axes.index(d) for d in desired_axes])
 
     @property
     def output_axes(self):
+        if len(self.layers) == 0:
+            return None
         return self.layers[-1].output_axes
 
     def __repr__(self):
@@ -257,14 +252,14 @@ if __name__ == "__main__":
             SentenceConvolution(n_feature_maps=5, kernel_width=6, n_input_dimensions=42),
             SumFolding(),
             KMaxPooling(k=4),
-            Bias(n_input_dims=4, n_feature_maps=5),
+            Bias(n_input_dims=21, n_feature_maps=5),
             Relu(),
         ],
     )
 
-    #print csm
-
     print csm.fprop(mini_batch).shape, csm.output_axes
+
+    print csm
 
 
 
