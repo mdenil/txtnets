@@ -209,14 +209,15 @@ class CSM(object):
         w: sentence_length, index over words
         f: n_feature_maps, index over feature maps
         d: n_input_dimensions, index over dimensions of the input in the non-sentence direction
-
         """
         if current_axes == desired_axes:
             return X
-        else:
-            return np.transpose(
-                X,
-                [current_axes.index(d) for d in desired_axes])
+
+        assert set(current_axes) == set(desired_axes)
+
+        X = np.transpose(X, [current_axes.index(d) for d in desired_axes])
+
+        return X
 
     @property
     def output_axes(self):
@@ -260,49 +261,3 @@ if __name__ == "__main__":
     print csm.fprop(mini_batch).shape, csm.output_axes
 
     print csm
-
-
-
-
-    exit(0)
-
-    embedding = WordEmbedding(
-        dimension=42, # 1
-        vocabulary_size=vocabulary_size,
-    )
-
-    mini_batch_embeddings = embedding.fprop(mini_batch)
-    print "Embedding shape:", mini_batch_embeddings.shape
-
-    layer1_conv = SentenceConvolution(
-        n_feature_maps=5, # 3
-        kernel_width=6, # 4
-        n_input_dimensions=42, # 1
-    )
-
-    M_1 = layer1_conv.fprop(mini_batch_embeddings)
-
-    print "First level feature maps shape:", M_1.shape
-
-    folding = SumFolding()
-
-    M_1_folded = folding.fprop(M_1)
-
-    print "Folded first level feature maps shape:", M_1_folded.shape
-
-    k_max_pooling = KMaxPooling(k=4)
-
-    M_1_pooled = k_max_pooling.fprop(M_1_folded)
-
-
-    bias = Bias(
-        n_input_dims=4,
-        n_feature_maps=5,
-    )
-
-    M_1_pooled_biased = bias.fprop(M_1_pooled)
-
-    relu = Relu()
-
-    M_1_pooled_biased_relu = relu.fprop(M_1_pooled_biased)
-
