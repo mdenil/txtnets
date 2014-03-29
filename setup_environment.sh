@@ -56,3 +56,5 @@ conda create --yes --prefix "$ENV" python pip
 source activate "$ENV"
 
 safe_call conda_install numpy scipy mkl
+safe_call pip_install pyprind
+safe_call conda_install matplotlib

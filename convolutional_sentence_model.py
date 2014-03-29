@@ -1,263 +1,126 @@
 __author__ = 'mdenil'
 
 import numpy as np
-import scipy.fftpack
+import pyprind
 
-class WordEmbedding(object):
-    def __init__(self,
-                 dimension,
-                 vocabulary_size,
-                 ):
+from cpu import model
 
-        self.dimension = dimension
-        self.vocabulary_size = vocabulary_size
-
-        self.E = 0.05 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
-
-        self.input_axes = ['b', 'w']
-        self.output_axes = ['b', 'w', 'd']
-
-    def fprop(self, X):
-        b, w = X.shape
-
-        # ravel() unwinds in C order, (row major).  The result is each sentence appears consecutavely.
-        # There is one word per row, and sentence are stacked vertically.
-        X = self.E[X.ravel()]
-
-        return np.reshape(X, (b, w, self.dimension))
-
-    def __repr__(self):
-        return "{}(dim={}, vocab_size={})".format(
-            self.__class__.__name__,
-            self.dimension,
-            self.vocabulary_size)
+# def stack2param(stack, decodeInfo):
+#     stack = stack.ravel()
+#
+#     # extract
+#     base = 0
+#     decoded = []
+#     for i,shape in enumerate(decodeInfo):
+#         m = stack[base:base + np.prod(shape)].reshape(*shape, order='F')
+#         base += np.prod(shape)
+#         decoded.append(m)
+#
+#     # map to numpy shapes
+#     for i in xrange(len(decoded)):
+#         # I want to convolve along rows because that makes sense for C-ordered arrays
+#         # the matlab code also convolves along rows, so I need to not transpose the convolution filters
+#         if i not in [1]:
+#             decoded[i] = np.ascontiguousarray(np.transpose(decoded[i]))
+#         else:
+#             decoded[i] = np.ascontiguousarray(decoded[i])
+#
+#     return decoded
 
 
-class SentenceConvolution(object):
-    def __init__(self,
-                 n_feature_maps,
-                 kernel_width,
-                 n_input_dimensions,
-                 ):
+def load_testing_model(file_name):
+    model_data = scipy.io.loadmat(file_name)
 
-        self.n_feature_maps = n_feature_maps
-        self.kernel_width = kernel_width
-        self.n_input_dimensions = n_input_dimensions
+    # [CR_E, CR_1, CR_1_b, CR_2, CR_2_b, CR_3, CR_3_b, CR_Z, _, _] = stack2param(model_data['X'], model_data['decodeInfo'])
 
-        self.W = 0.05 * np.random.standard_normal(size=(self.n_feature_maps * self.n_input_dimensions, self.kernel_width))
+    CR_E = np.ascontiguousarray(np.transpose(model_data['CR_E']))
+    # I want to convolve along rows because that makes sense for C-ordered arrays
+    # the matlab code also convolves along rows, so I need to not transpose the convolution filters
+    CR_1 = np.ascontiguousarray(model_data['CR_1'])
+    CR_1_b = np.ascontiguousarray(np.transpose(model_data['CR_1_b']))
 
-        self.input_axes = ['b', 'd', 'w']
-        self.output_axes = ['b', 'f', 'd', 'w']
+    embedding = model.embedding.WordEmbedding(
+        dimension=CR_E.shape[1],
+        vocabulary_size=CR_E.shape[0])
+    assert CR_E.shape == embedding.E.shape
+    embedding.E = CR_E
 
-    def fprop(self, X):
-        b, d, w = X.shape
+    conv = model.transfer.SentenceConvolution(
+        n_feature_maps=5,
+        kernel_width=6,
+        n_input_dimensions=42)
+    assert conv.W.shape == CR_1.shape
+    conv.W = CR_1
 
-        assert self.n_input_dimensions == d
-        f = self.n_feature_maps
+    bias = model.transfer.Bias(
+        n_input_dims=21,
+        n_feature_maps=5)
+    bias.b = CR_1_b.reshape(bias.b.shape)
 
-        X = np.reshape(
-            np.transpose(
-                np.concatenate([X[np.newaxis]] * f), # f b d w
-                (1, 0, 2, 3)
-            ),
-            (b * f * d, w)
+    csm = model.model.CSM(
+        input_axes=['b', 'w'],
+        layers=[
+            embedding,
+            conv,
+            model.pooling.SumFolding(),
+            model.pooling.KMaxPooling(k=4),
+            bias,
+            model.nonlinearity.Tanh(),
+            ],
         )
 
-        # This part is probably wrong, the shapes are right though
+    return csm
 
-        X_padding_size = self.kernel_width - 1
-        X = np.hstack([X, np.zeros((X.shape[0], X_padding_size))])
-
-        K_padding_size = X.shape[1] - self.kernel_width
-        K = np.hstack([self.W, np.zeros((self.W.shape[0], K_padding_size))])
-        K = np.vstack([K] * b)
-
-        X = scipy.fftpack.fft(X, axis=1)
-        K = scipy.fftpack.fft(K, axis=1)
-
-        X = scipy.fftpack.ifft(X*K)
-
-        representation_length = w + self.kernel_width - 1
-
-        return np.reshape(
-            X,
-            (b, f, d, representation_length))
-
-    def __repr__(self):
-        return "{}(W={})".format(
-            self.__class__.__name__,
-            self.W.shape)
-
-
-class SumFolding(object):
-    def __init__(self):
-        self.input_axes = ['d', 'b', 'f', 'w']
-        self.output_axes = ['d', 'b', 'f', 'w']
-
-    def fprop(self, X):
-        d, b, f, w = X.shape
-
-        assert ( d % 2 == 0 )
-        folded_size = d / 2
-
-        X = X[:folded_size] + X[folded_size:]
-
-        X = np.reshape(
-            X, (folded_size, b, f, w)
-        )
-
-        return X
-
-    def __repr__(self):
-        return "{}()".format(
-            self.__class__.__name__)
-
-class KMaxPooling(object):
-    def __init__(self, k):
-        self.k = k
-        self.input_axes = ['d', 'b', 'f', 'w']
-        self.output_axes = ['d', 'b', 'f', 'w']
-
-    def fprop(self, X):
-        d, b, f, w = X.shape
-
-        X = np.reshape(
-            X,
-            (d * b * f, w)
-        )
-
-        k_max_indexes = np.argsort(X, axis=1)
-        k_max_indexes = k_max_indexes[:,-self.k:]
-        k_max_indexes.sort(axis=1)
-
-        rows = np.vstack([np.arange(d * b * f)] * self.k).T
-
-        X = X[rows, k_max_indexes]
-
-        X = np.reshape(
-            X,
-            (d, b, f, self.k)
-        )
-
-        return X
-
-    def __repr__(self):
-        return "{}(k={})".format(
-            self.__class__.__name__,
-            self.k)
-
-class Bias(object):
-    def __init__(self, n_input_dims, n_feature_maps):
-        self.n_input_dims = n_input_dims
-        self.n_feature_maps = n_feature_maps
-
-        self.b = np.zeros((n_input_dims, n_feature_maps))
-
-        self.input_axes = ['b', 'w', 'd', 'f']
-        self.output_axes = ['b', 'w', 'd', 'f']
-
-    def fprop(self, X):
-        b, w, d, f = X.shape
-
-        assert self.n_input_dims == d
-        assert self.n_feature_maps == f
-
-        X += self.b
-
-        return X
-
-    def __repr__(self):
-        return "{}(n_input_dims={}, n_feature_maps={})".format(
-            self.__class__.__name__,
-            self.n_input_dims,
-            self.n_feature_maps)
-
-class Relu(object):
-    def __init__(self):
-        self.input_axes = ['b', 'w', 'f', 'd']
-        self.output_axes = ['b', 'w', 'f', 'd']
-
-    def fprop(self, X):
-        return np.maximum(0, X)
-
-    def __repr__(self):
-        return "{}()".format(
-            self.__class__.__name__)
-
-class CSM(object):
-    def __init__(self,
-                 input_axes,
-                 layers,
-                 ):
-        self.input_axes = input_axes
-        self.layers = layers
-
-    def fprop(self, X):
-        current_axes = self.input_axes
-        for layer in self.layers:
-            X = self._permute_data(X, current_axes, layer.input_axes)
-            X = layer.fprop(X)
-            current_axes = layer.output_axes
-
-        return X
-
-    def _permute_data(self, X, current_axes, desired_axes):
-        """
-        Axis types:
-
-        b: batch_size, index over data
-        w: sentence_length, index over words
-        f: n_feature_maps, index over feature maps
-        d: n_input_dimensions, index over dimensions of the input in the non-sentence direction
-        """
-        if current_axes == desired_axes:
-            return X
-
-        assert set(current_axes) == set(desired_axes)
-
-        X = np.transpose(X, [current_axes.index(d) for d in desired_axes])
-
-        return X
-
-    @property
-    def output_axes(self):
-        if len(self.layers) == 0:
-            return None
-        return self.layers[-1].output_axes
-
-    def __repr__(self):
-        return "\n".join([
-            "CSM {",
-            "\n".join(l.__repr__() for l in self.layers),
-            "}"
-            ])
 
 if __name__ == "__main__":
     import scipy.io
 
     data_file_name = "cnn-sm-gpu-kmax/SENT_vec_1_emb_ind_bin.mat"
-
     data = scipy.io.loadmat(data_file_name)
 
+    embedding_dim = 42
     batch_size = 40
-
-    mini_batch = data['train'][:batch_size] - 1 # -1 to switch to zero based indexing
-    max_sentence_length = mini_batch.shape[1]
-
     vocabulary_size = int(data['size_vocab'])
+    max_epochs = 1
 
-    csm = CSM(
-        input_axes=['b', 'w'],
-        layers=[
-            WordEmbedding(dimension=42, vocabulary_size=vocabulary_size),
-            SentenceConvolution(n_feature_maps=5, kernel_width=6, n_input_dimensions=42),
-            SumFolding(),
-            KMaxPooling(k=4),
-            Bias(n_input_dims=21, n_feature_maps=5),
-            Relu(),
-        ],
-    )
+    train = data['train'] - 1
+    train_sentence_lengths = data['train_lbl'][:,1]
 
-    print csm.fprop(mini_batch).shape, csm.output_axes
+    max_sentence_length = data['train'].shape[1]
 
-    print csm
+    csm = load_testing_model("cnn-sm-gpu-kmax/DEBUGGING_MODEL.mat")
+
+    n_batches_per_epoch = int(data['train'].shape[0] / batch_size)
+
+    matlab_results = scipy.io.loadmat("cnn-sm-gpu-kmax/BATCH_RESULTS_ONE_PASS_ONE_LAYER_CHECK.mat")['batch_results']
+
+    progress_bar = pyprind.ProgPercent(n_batches_per_epoch)
+
+    for batch_index in xrange(n_batches_per_epoch):
+
+        # batch_index = 4065 # <- this batch is the one with errors
+
+        minibatch = train[batch_index*batch_size:(batch_index+1)*batch_size]
+
+        meta = {'lengths': train_sentence_lengths[batch_index*batch_size:(batch_index+1)*batch_size]}
+
+        # s1 = csm.fprop(minibatch, num_layers=1, meta=meta)
+        # s2 = csm.fprop(minibatch, num_layers=2, meta=meta)
+        # s3 = csm.fprop(minibatch, num_layers=3, meta=meta)
+        # s4 = csm.fprop(minibatch, num_layers=4, meta=meta)
+        # s5 = csm.fprop(minibatch, num_layers=5, meta=meta)
+        # s6 = csm.fprop(minibatch, num_layers=6, meta=meta)
+        # assert np.allclose(s6, csm.fprop(minibatch, meta=meta))
+
+        out = csm.fprop(minibatch, meta)
+
+        if not np.allclose(out, matlab_results[batch_index]):
+            print "\nFailed batch {}. Max abs err={}.  There are {} errors larger than 1e-2.".format(
+                batch_index,
+                np.max(np.abs(out - matlab_results[batch_index])),
+                np.sum(np.abs(out - matlab_results[batch_index]) > 1e-2))
+
+        progress_bar.update()
+
+
+
