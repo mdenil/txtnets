@@ -2,6 +2,7 @@ __author__ = 'mdenil'
 
 import numpy as np
 import pyprind
+import scipy.io
 
 from cpu import model
 
@@ -23,7 +24,7 @@ def load_testing_model(file_name):
 
     conv = model.transfer.SentenceConvolution(
         n_feature_maps=5,
-        kernel_width=6,
+        kernel_width=2,
         n_input_dimensions=42)
     assert conv.W.shape == CR_1.shape
     conv.W = CR_1
@@ -39,7 +40,7 @@ def load_testing_model(file_name):
             embedding,
             conv,
             model.pooling.SumFolding(),
-            model.pooling.KMaxPooling(k=4),
+            model.pooling.KMaxPooling(k=7),
             bias,
             model.nonlinearity.Tanh(),
             ],
@@ -47,30 +48,24 @@ def load_testing_model(file_name):
 
     return csm
 
-
-if __name__ == "__main__":
-    import scipy.io
+def run():
+    tol = 1e-6
 
     data_file_name = "verify_forward_pass/data/SENT_vec_1_emb_ind_bin.mat"
     data = scipy.io.loadmat(data_file_name)
-
     embedding_dim = 42
     batch_size = 40
     vocabulary_size = int(data['size_vocab'])
     max_epochs = 1
-
     train = data['train'] - 1
     train_sentence_lengths = data['train_lbl'][:,1]
-
     max_sentence_length = data['train'].shape[1]
-
     csm = load_testing_model("verify_forward_pass/data/debugging_model_params.mat")
-
     n_batches_per_epoch = int(data['train'].shape[0] / batch_size)
-
     matlab_results = scipy.io.loadmat("verify_forward_pass/data/batch_results_first_layer.mat")['batch_results']
-
     progress_bar = pyprind.ProgPercent(n_batches_per_epoch)
+    total_errs = 0
+    total_checked = 0
 
     for batch_index in xrange(n_batches_per_epoch):
 
@@ -81,12 +76,22 @@ if __name__ == "__main__":
         out = csm.fprop(minibatch, meta)
 
         if not np.allclose(out, matlab_results[batch_index]):
-            print "\nBatch {}: Max abs err={}. There are {} errors larger than 1e-2.".format(
-                batch_index,
-                np.max(np.abs(out - matlab_results[batch_index])),
-                np.sum(np.abs(out - matlab_results[batch_index]) > 1e-2))
+            n_new_errs = np.sum(np.abs(out - matlab_results[batch_index]) > tol)
+            total_errs += n_new_errs
+            # print "\nFailed batch {}. Max abs err={}.  There are {} errors larger than {}.".format(
+            #     batch_index,
+            #     np.max(np.abs(out - matlab_results[batch_index])),
+            #     n_new_errs,
+            #     tol)
+        total_checked += out.size
 
         progress_bar.update()
 
+        # if batch_index > 500:
+        #     break
+
+    print "Total errs > {}: {} ({} %)".format(tol, total_errs, float(total_errs) / total_checked * 100.0)
 
 
+if __name__ == "__main__":
+    run()

@@ -55,6 +55,11 @@ export LD_LIBRARY_PATH="$LIB"
 conda create --yes --prefix "$ENV" python pip
 source activate "$ENV"
 
+# you also need to install fftw
+
 safe_call conda_install numpy scipy mkl
-safe_call pip_install pyprind
 safe_call conda_install matplotlib
+safe_call conda_install psutil
+safe_call pip_install pyprind
+safe_call pip_install pyfftw
+safe_call pip_install --pre line_profiler

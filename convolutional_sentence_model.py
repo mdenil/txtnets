@@ -5,33 +5,9 @@ import pyprind
 
 from cpu import model
 
-# def stack2param(stack, decodeInfo):
-#     stack = stack.ravel()
-#
-#     # extract
-#     base = 0
-#     decoded = []
-#     for i,shape in enumerate(decodeInfo):
-#         m = stack[base:base + np.prod(shape)].reshape(*shape, order='F')
-#         base += np.prod(shape)
-#         decoded.append(m)
-#
-#     # map to numpy shapes
-#     for i in xrange(len(decoded)):
-#         # I want to convolve along rows because that makes sense for C-ordered arrays
-#         # the matlab code also convolves along rows, so I need to not transpose the convolution filters
-#         if i not in [1]:
-#             decoded[i] = np.ascontiguousarray(np.transpose(decoded[i]))
-#         else:
-#             decoded[i] = np.ascontiguousarray(decoded[i])
-#
-#     return decoded
-
 
 def load_testing_model(file_name):
     model_data = scipy.io.loadmat(file_name)
-
-    # [CR_E, CR_1, CR_1_b, CR_2, CR_2_b, CR_3, CR_3_b, CR_Z, _, _] = stack2param(model_data['X'], model_data['decodeInfo'])
 
     CR_E = np.ascontiguousarray(np.transpose(model_data['CR_E']))
     # I want to convolve along rows because that makes sense for C-ordered arrays
@@ -47,7 +23,8 @@ def load_testing_model(file_name):
 
     conv = model.transfer.SentenceConvolution(
         n_feature_maps=5,
-        kernel_width=6,
+        kernel_width=2,
+        #kernel_width=6,
         n_input_dimensions=42)
     assert conv.W.shape == CR_1.shape
     conv.W = CR_1
@@ -63,7 +40,8 @@ def load_testing_model(file_name):
             embedding,
             conv,
             model.pooling.SumFolding(),
-            model.pooling.KMaxPooling(k=4),
+            #model.pooling.KMaxPooling(k=4),
+            model.pooling.KMaxPooling(k=7),
             bias,
             model.nonlinearity.Tanh(),
             ],
@@ -75,7 +53,7 @@ def load_testing_model(file_name):
 if __name__ == "__main__":
     import scipy.io
 
-    data_file_name = "cnn-sm-gpu-kmax/SENT_vec_1_emb_ind_bin.mat"
+    data_file_name = "verify_forward_pass/data/SENT_vec_1_emb_ind_bin.mat"
     data = scipy.io.loadmat(data_file_name)
 
     embedding_dim = 42
@@ -88,17 +66,21 @@ if __name__ == "__main__":
 
     max_sentence_length = data['train'].shape[1]
 
-    csm = load_testing_model("cnn-sm-gpu-kmax/DEBUGGING_MODEL.mat")
+    csm = load_testing_model("verify_forward_pass/data/debugging_model_params.mat")
 
     n_batches_per_epoch = int(data['train'].shape[0] / batch_size)
 
-    matlab_results = scipy.io.loadmat("cnn-sm-gpu-kmax/BATCH_RESULTS_ONE_PASS_ONE_LAYER_CHECK.mat")['batch_results']
+    # matlab_results = scipy.io.loadmat("cnn-sm-gpu-kmax/BATCH_RESULTS_ONE_PASS_ONE_LAYER_CHECK.mat")['batch_results']
+    matlab_results = scipy.io.loadmat("verify_forward_pass/data/batch_results_first_layer.mat")['batch_results']
 
     progress_bar = pyprind.ProgPercent(n_batches_per_epoch)
 
+    total_errs = 0
+
     for batch_index in xrange(n_batches_per_epoch):
 
-        # batch_index = 4065 # <- this batch is the one with errors
+        if batch_index == 3:
+            pass
 
         minibatch = train[batch_index*batch_size:(batch_index+1)*batch_size]
 
@@ -115,12 +97,13 @@ if __name__ == "__main__":
         out = csm.fprop(minibatch, meta)
 
         if not np.allclose(out, matlab_results[batch_index]):
+            n_new_errs = np.sum(np.abs(out - matlab_results[batch_index]) > 1e-2)
+            total_errs += n_new_errs
             print "\nFailed batch {}. Max abs err={}.  There are {} errors larger than 1e-2.".format(
                 batch_index,
                 np.max(np.abs(out - matlab_results[batch_index])),
-                np.sum(np.abs(out - matlab_results[batch_index]) > 1e-2))
+                n_new_errs)
 
         progress_bar.update()
 
-
-
+    print "Total errs > 1e-2: {} ({}%)".format(total_errs, float(total_errs) / batlab_results.size * 100.0)

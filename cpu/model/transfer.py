@@ -1,18 +1,23 @@
 __author__ = 'mdenil'
 
 import numpy as np
-import scipy.fftpack
+import pyfftw
+import psutil
+
+pyfftw.interfaces.cache.enable()
 
 class SentenceConvolution(object):
     def __init__(self,
                  n_feature_maps,
                  kernel_width,
                  n_input_dimensions,
+                 n_threads=psutil.NUM_CPUS,
                  ):
 
         self.n_feature_maps = n_feature_maps
         self.kernel_width = kernel_width
         self.n_input_dimensions = n_input_dimensions
+        self.n_threads = n_threads
 
         self.W = 0.05 * np.random.standard_normal(size=(self.n_feature_maps * self.n_input_dimensions, self.kernel_width))
 
@@ -54,9 +59,9 @@ class SentenceConvolution(object):
         X = np.concatenate([X, np.zeros_like(X)], axis=1)
         K = np.concatenate([K, np.zeros_like(K)], axis=1)
 
-        X = scipy.fftpack.fft(X, axis=1)
-        K = scipy.fftpack.fft(K, axis=1)
-        X = scipy.fftpack.ifft(X*K, axis=1).real
+        X = pyfftw.interfaces.numpy_fft.fft(X, axis=1, threads=self.n_threads)
+        K = pyfftw.interfaces.numpy_fft.fft(K, axis=1, threads=self.n_threads)
+        X = pyfftw.interfaces.numpy_fft.ifft(X*K, axis=1, threads=self.n_threads).real
 
         # trim
 

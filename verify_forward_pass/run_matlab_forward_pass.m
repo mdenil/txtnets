@@ -1,5 +1,7 @@
 clear;
 
+% maxNumCompThreads(1); % force 1 core
+
 data_f = 'data/SENT_vec_1_emb_ind_bin';
 
 load(data_f, 'train','train_lbl', 'valid', 'valid_lbl',  'test', 'test_lbl', 'size_vocab','sent_length', 'vocab_emb', 'index');
@@ -11,13 +13,13 @@ p(2) = sent_length; disp(strcat('Max sent length:',num2str(p(2))));
 p(3) = 5;           disp(strcat('Number feat maps in first layer:',num2str(p(3))));
 p(5) = 10;           disp(strcat('Number feat maps in second layer:', num2str(p(5))));
 p(37) = 18;          disp(strcat('Number feat maps in third layer:', num2str(p(37))));
-p(4) = 6;           disp(strcat('Size of kernel in first layer:', num2str(p(4))));
+p(4) = 2;           disp(strcat('Size of kernel in first layer:', num2str(p(4))));
 p(6) = 5;           disp(strcat('Size of kernel in second layer:', num2str(p(6))));
 p(36) = 3;          disp(strcat('Size of kernel in third layer:', num2str(p(36))));
 p(8) = 0;           disp(strcat('Using relu:',num2str(p(8))));
 p(9) = 6;           disp(strcat('Number of output classes:',num2str(p(9))));
 p(10) = 1;          disp(strcat('Number of conv layers being used (1 or 2 or 3):',num2str(p(10))));
-p(7) = 4;           disp(strcat('TOP POOLING width:',num2str(p(7)))); 
+p(7) = 7;           disp(strcat('TOP POOLING width:',num2str(p(7))));
 p(12) = 1;          disp(strcat('Folding in first layer:', num2str(p(12))));
 p(13) = 1;          disp(strcat('Folding in second layer:', num2str(p(13))));
 p(35) = 0;          disp(strcat('Folding in third layer:',num2str(p(35))));
@@ -144,9 +146,9 @@ for j=1:num_batch_epochs
 
     M_1 = tanh(M_1);
 
-    batch_results{end+1} = permute(reshape(M_1, p(1), p(3), size_mini, 4), [3,4,2,1]);
+    batch_results{end+1} = permute(reshape(M_1, p(1), p(3), size_mini, p(7)), [3,4,2,1]);
 
-    if j % 100 == 0
+    if mod(j, 100) == 0
         fprintf('.');
     end
 
