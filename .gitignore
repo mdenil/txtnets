@@ -3,7 +3,6 @@ env/
 .idea/
 cnn-sm-gpu-kmax
 *~
-*.iml
 *.bak
 *.pyc
 *.swp

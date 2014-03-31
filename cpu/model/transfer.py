@@ -6,6 +6,43 @@ import psutil
 
 pyfftw.interfaces.cache.enable()
 
+class Softmax(object):
+    def __init__(self,
+                 n_classes,
+                 n_input_dimensions):
+        self.n_classes = n_classes
+        self.n_input_dimensions = n_input_dimensions
+
+        self.W = 0.05 * np.random.standard_normal(size=(self.n_classes, self.n_input_dimensions))
+        self.b = np.zeros(shape=(self.n_classes,1))
+
+        self.input_axes = ['w', 'd', 'f', 'b']
+        self.output_axes = ['d', 'b']
+
+    def fprop(self, X, **meta):
+        w, d, f, b = X.shape
+
+        X = np.reshape(
+            X,
+            (w * d* f, b)
+        )
+
+        X = np.exp(np.dot(self.W, X) + self.b)
+        X /= np.sum(X, axis=0)
+
+        meta['lengths'][:] = self.n_classes
+
+        return X, meta
+
+    def bprop(self, Y, **meta):
+        pass
+
+    def __repr__(self):
+        return "{}(W={})".format(
+            self.__class__.__name__,
+            self.W.shape)
+
+
 class SentenceConvolution(object):
     def __init__(self,
                  n_feature_maps,
