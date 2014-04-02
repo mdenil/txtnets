@@ -4,8 +4,7 @@ import numpy as np
 
 class CrossEntropy(object):
     def __init__(self):
-        self.input_axes = ['b', 'd']
-        self.output_axes = [] # scalar output
+        pass
 
     def fprop(self, Y, Y_true, **meta):
         # really bad things happen if Y_true is a bool array

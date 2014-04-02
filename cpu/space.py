@@ -17,13 +17,21 @@ class Space(object):
         assert len(X.shape) == len(axes)
         return Space(axes, OrderedDict(zip(axes, X.shape)))
 
-    def transform_axes(self, X, new_axes):
+    def transform(self, X, new_axes):
         new_extent = OrderedDict([
             (ax, self._extent.get(ax, 1))
             for ax in _fold_axes(new_axes)])
         new_space = Space(new_axes, new_extent)
 
-        expanded_space = self._expand_axes(new_space.folded_axes)
+        if set(self.folded_axes) <= set(new_space.folded_axes):
+            expanded_axes = list(self.axes)
+            expanded_extent = OrderedDict(self._extent)
+            for ax in set(new_space.folded_axes) - set(self.folded_axes):
+                expanded_axes.append(ax)
+                expanded_extent[ax] = 1
+            expanded_space = Space(expanded_axes, expanded_extent)
+        else:
+            expanded_space = self
 
         assert set(expanded_space.folded_axes) == set(new_space.folded_axes)
 
@@ -33,18 +41,7 @@ class Space(object):
 
         return X, new_space
 
-    def _expand_axes(self, new_axes):
-        shared_axes = [ax for ax in _fold_axes(new_axes) if ax in self.folded_axes]
-        assert self.folded_axes == shared_axes
-
-        new_extent = OrderedDict([
-            (ax, self._extent.get(ax, 1))
-            for ax in new_axes])
-        new_space = Space(new_axes, new_extent)
-
-        return new_space
-
-    def replicate(self, X, **replicas):
+    def broadcast(self, X, **replicas):
         new_extent = OrderedDict([
             (ax, self._extent[ax]*replicas.get(ax, 1))
             for ax in _fold_axes(self.axes)])
@@ -65,8 +62,16 @@ class Space(object):
         return np.reshape(X, self.shape)
 
     def set_extent(self, **extents):
+        space = self.clone()
         for ax,ex in extents.iteritems():
-            self._extent[ax] = ex
+            space._extent[ax] = ex
+        return space
+
+    def get_extent(self, axes):
+        return [self._size_of_axis(ax) for ax in axes]
+
+    def clone(self):
+        return Space(self._axes, self._extent)
 
     @property
     def size(self):

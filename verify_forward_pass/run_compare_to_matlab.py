@@ -87,9 +87,10 @@ def run():
         # don't keep these as bools because -True == False for numpy bools (not python bools)
         minibatch_labels = np.equal.outer(minibatch_labels, np.arange(6))#.astype(np.float64)
 
-        meta = {'lengths': train_sentence_lengths[batch_index*batch_size:(batch_index+1)*batch_size]}
+        # meta = {'lengths': train_sentence_lengths[batch_index*batch_size:(batch_index+1)*batch_size]}
+        lengths = train_sentence_lengths[batch_index*batch_size:(batch_index+1)*batch_size]
 
-        out = csm.fprop(minibatch, meta)
+        out = csm.fprop(minibatch, lengths=lengths)
 
         if not np.allclose(out, matlab_results[batch_index]):
             n_new_errs_small = np.sum(np.abs(out - matlab_results[batch_index]) > tol)
@@ -99,27 +100,12 @@ def run():
             # print "\nFailed batch {}. Max abs err={}.  There are {} errors larger than {}.".format(
             #     batch_index,
             #     np.max(np.abs(out - matlab_results[batch_index])),
-            #     n_new_errs,
+            #     n_new_errs_small,
             #     tol)
         total_checked += out.size
 
-        # out = model.tools.permute_axes(out, current_axes=csm.output_axes, desired_axes=cost_function.input_axes)
-
-        # here: out == Z
-
-        # cost, _ = cost_function.fprop(X=out, Y=minibatch_labels)
-        #
-        # print scipy.optimize.check_grad(lambda x: cost_function.fprop(X=x.reshape(40,6), Y=minibatch_labels)[0].ravel(),
-        #                           lambda x: cost_function.bprop(X=x.reshape(40,6), Y=minibatch_labels)[0].ravel(),
-        #                           out.ravel())
-        #
-        # b1, _ = cost_function.bprop(X=out, Y=minibatch_labels)
-        #
-        # softmax_layer = csm.layers[-1]
-        #
-        # b1_a = model.tools.permute_axes(-b1, current_axes=cost_function.input_axes, desired_axes=softmax_layer.output_axes)
-        #
-        # b2, _ = softmax_layer.bprop(b1_a)
+        # if batch_index > 5:
+        #     break
 
         progress_bar.update()
 

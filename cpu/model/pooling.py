@@ -7,19 +7,14 @@ from cpu import space
 class KMaxPooling(object):
     def __init__(self, k):
         self.k = k
-        self.input_axes = ['d', 'f', 'b', 'w']
-        self.output_axes = ['d', 'f', 'b', 'w']
 
     def fprop(self, X, **meta):
-        d, f, b, w = X.shape
+        # d, f, b, w = X.shape
 
-        working_space = space.Space.infer(X, self.input_axes)
-        X, working_space = working_space.transform_axes(X, ['dfb', 'w'])
+        working_space = meta['data_space']
+        X, working_space = working_space.transform(X, ['dfb', 'w'])
+        d, f, b, w = working_space.get_extent(['d', 'f', 'b', 'w'])
 
-        # X = np.reshape(
-        #     X,
-        #     (d * f * b, w)
-        # )
 
         # padding_mask has axes [b, w]
         padding_mask = meta['lengths'].reshape((-1,1)) <= np.arange(w)
@@ -43,13 +38,7 @@ class KMaxPooling(object):
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
 
-        working_space.set_extent(w=self.k)
-        X, working_space = working_space.transform_axes(X, self.output_axes)
-
-        # X = np.reshape(
-        #     X,
-        #     (d, f, b, self.k)
-        # )
+        meta['data_space'] = working_space.set_extent(w=self.k)
 
         # everything has been truncated to length k or smaller
         meta['lengths'] = np.minimum(meta['lengths'], self.k)
@@ -66,21 +55,21 @@ class KMaxPooling(object):
 
 class SumFolding(object):
     def __init__(self):
-        self.input_axes = ['d', 'b', 'f', 'w']
-        self.output_axes = ['d', 'b', 'f', 'w']
+        pass
 
     def fprop(self, X, **meta):
-        d, b, f, w = X.shape
+        data_space = meta['data_space']
 
+        d, = data_space.get_extent('d')
         assert ( d % 2 == 0 )
         folded_size = d / 2
 
+        X, data_space = data_space.transform(X, ['d', 'b', 'f', 'w'])
+
         X = X[:folded_size] + X[folded_size:]
 
-        X = np.reshape(
-            X, (folded_size, b, f, w)
-        )
-
+        data_space = data_space.set_extent(d=folded_size)
+        meta['data_space'] = data_space
         return X, meta
 
     def __repr__(self):

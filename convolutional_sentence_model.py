@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     n_batches_per_epoch = int(data['train'].shape[0] / batch_size)
 
-    # matlab_results = scipy.io.loadmat("cnn-sm-gpu-kmax/BATCH_RESULTS_ONE_PASS_ONE_LAYER_CHECK.mat")['batch_results']
+    matlab_results = scipy.io.loadmat("cnn-sm-gpu-kmax/BATCH_RESULTS_ONE_PASS_ONE_LAYER_CHECK.mat")['batch_results']
     # matlab_results = scipy.io.loadmat("verify_forward_pass/data/batch_results_first_layer.mat")['batch_results']
 
     progress_bar = pyprind.ProgPercent(n_batches_per_epoch)
@@ -104,15 +104,13 @@ if __name__ == "__main__":
 
         out = csm.fprop(minibatch, meta)
 
-        print out.shape
-
-        # if not np.allclose(out, matlab_results[batch_index]):
-        #     n_new_errs = np.sum(np.abs(out - matlab_results[batch_index]) > 1e-2)
-        #     total_errs += n_new_errs
-        #     print "\nFailed batch {}. Max abs err={}.  There are {} errors larger than 1e-2.".format(
-        #         batch_index,
-        #         np.max(np.abs(out - matlab_results[batch_index])),
-        #         n_new_errs)
+        if not np.allclose(out, matlab_results[batch_index]):
+            n_new_errs = np.sum(np.abs(out - matlab_results[batch_index]) > 1e-2)
+            total_errs += n_new_errs
+            print "\nFailed batch {}. Max abs err={}.  There are {} errors larger than 1e-2.".format(
+                batch_index,
+                np.max(np.abs(out - matlab_results[batch_index])),
+                n_new_errs)
 
         progress_bar.update()
 

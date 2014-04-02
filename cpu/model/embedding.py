@@ -2,6 +2,8 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+from cpu import space
+
 class WordEmbedding(object):
     def __init__(self,
                  dimension,
@@ -13,17 +15,16 @@ class WordEmbedding(object):
 
         self.E = 0.05 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
-        self.input_axes = ['b', 'w']
-        self.output_axes = ['b', 'w', 'd']
-
     def fprop(self, X, **meta):
-        b, w = X.shape
+        data_space = meta['data_space']
 
-        # ravel() unwinds in C order, (row major).  The result is each sentence appears consecutavely.
-        # There is one word per row, and sentence are stacked vertically.
+        X, data_space = data_space.transform(X, ['bw', 'd'])
+
         X = self.E[X.ravel()]
-        X = np.reshape(X, (b, w, self.dimension))
 
+        data_space = data_space.set_extent(d=self.dimension)
+
+        meta['data_space'] = data_space
         return X, meta
 
     def __repr__(self):

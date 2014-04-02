@@ -4,8 +4,7 @@ import numpy as np
 
 class Relu(object):
     def __init__(self):
-        self.input_axes = ['b', 'w', 'f', 'd']
-        self.output_axes = ['b', 'w', 'f', 'd']
+        pass
 
     def fprop(self, X, **meta):
         self.Y = np.maximum(0, X)
@@ -23,8 +22,7 @@ class Relu(object):
 
 class Tanh(object):
     def __init__(self):
-        self.input_axes = ['b', 'w', 'f', 'd']
-        self.output_axes = ['b', 'w', 'f', 'd']
+        pass
 
     def fprop(self, X, **meta):
         self.Y = np.tanh(X)

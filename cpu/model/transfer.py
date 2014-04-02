@@ -18,12 +18,9 @@ class Softmax(object):
         self.W = 0.05 * np.random.standard_normal(size=(self.n_classes, self.n_input_dimensions))
         self.b = np.zeros(shape=(self.n_classes,1))
 
-        self.input_axes = ['w', 'f', 'd', 'b']
-        self.output_axes = ['d', 'b']
-
     def fprop(self, X, **meta):
-        input_space = space.Space.infer(X, self.input_axes)
-        X, working_space = input_space.transform_axes(X, ['wfd', 'b'])
+        input_space = meta['data_space']
+        X, meta['data_space'] = input_space.transform(X, ['wfd', 'b'])
 
         X = np.exp(np.dot(self.W, X) + self.b)
         X /= np.sum(X, axis=0)
@@ -43,11 +40,6 @@ class Softmax(object):
         gb = delta.sum(axis=1).reshape(self.b.shape)
 
         return [gw, gb], meta
-
-    def _flatten_axes(self, X):
-        # TODO: remove references to this and then remove it entirely
-        w, f, d, b = X.shape
-        return np.reshape(X, (w * f * d, b))
 
     def __repr__(self):
         return "{}(W={})".format(
@@ -69,22 +61,23 @@ class SentenceConvolution(object):
         self.n_threads = n_threads
 
         self.W = 0.05 * np.random.standard_normal(
-            size=(self.n_feature_maps * self.n_input_dimensions, self.kernel_width))
-
-        self.input_axes = ['b', 'd', 'w']
-        self.output_axes = ['b', 'f', 'd', 'w']
+            size=(self.n_feature_maps, self.n_input_dimensions, self.kernel_width))
+        self._kernel_space = space.Space.infer(self.W, ['f', 'd', 'w'])
+        self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfd', 'w'])
 
     def fprop(self, X, **meta):
-        b, d, w = X.shape
+        data_space = meta['data_space']
+        lengths = meta['lengths']
+
+        b, d, w = data_space.get_extent(['b','d','w'])
 
         assert self.n_input_dimensions == d
         f = self.n_feature_maps
 
-        working_space = space.Space.infer(X, self.input_axes)
-        X, working_space = working_space.transform_axes(X, ['bfd', 'w'])
-        X, working_space = working_space.replicate(X, f=f)
+        X, data_space = data_space.transform(X, ['bfd', 'w'])
+        X, data_space = data_space.broadcast(X, f=f)
 
-        K = np.vstack([np.fliplr(self.W)] * b)
+        K, _ = self._kernel_space.broadcast(np.fliplr(self.W), b=b)
         kw = K.shape[1]
 
         # pad
@@ -116,10 +109,12 @@ class SentenceConvolution(object):
         representation_length = X.shape[1]
 
         # length of a wide convolution
-        meta['lengths'] = meta['lengths'] + self.kernel_width - 1
+        lengths = lengths + self.kernel_width - 1
 
-        working_space.set_extent(w=representation_length)
-        X, working_space = working_space.transform_axes(X, self.output_axes)
+        data_space = data_space.set_extent(w=representation_length)
+
+        meta['data_space'] = data_space
+        meta['lengths'] = lengths
 
         return X, meta
 
@@ -135,16 +130,18 @@ class Bias(object):
         self.n_feature_maps = n_feature_maps
 
         self.b = np.zeros((n_feature_maps, n_input_dims))
-        self.input_axes = ['b', 'w', 'f', 'd']
-        self.output_axes = ['b', 'w', 'f', 'd']
 
     def fprop(self, X, **meta):
-        b, w, f, d = X.shape
+        data_space = meta['data_space']
 
-        assert self.n_input_dims == d
-        assert self.n_feature_maps == f
+        assert [self.n_input_dims] == data_space.get_extent('d')
+        assert [self.n_feature_maps] == data_space.get_extent('f')
+
+        X, data_space = data_space.transform(X, ['b', 'w', 'f', 'd'])
 
         X += self.b
+
+        meta['data_space'] = data_space
 
         return X, meta
 
