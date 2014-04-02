@@ -60,6 +60,7 @@ source activate "$ENV"
 safe_call conda_install numpy scipy mkl
 safe_call conda_install matplotlib
 safe_call conda_install psutil
+safe_call conda_install nose
 safe_call pip_install pyprind
 safe_call pip_install pyfftw
 safe_call pip_install --pre line_profiler

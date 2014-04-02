@@ -8,8 +8,12 @@ class Relu(object):
         self.output_axes = ['b', 'w', 'f', 'd']
 
     def fprop(self, X, **meta):
-        X = np.maximum(0, X)
-        return X, meta
+        self.Y = np.maximum(0, X)
+        return self.Y, meta
+
+    # def bprop(self, delta, **meta):
+    #     back = delta * (self.Y > 0)
+    #     return back, meta
 
     def __repr__(self):
         return "{}()".format(
@@ -23,8 +27,12 @@ class Tanh(object):
         self.output_axes = ['b', 'w', 'f', 'd']
 
     def fprop(self, X, **meta):
-        X = np.tanh(X)
-        return X, meta
+        self.Y = np.tanh(X)
+        return self.Y, meta
+
+    # def bprop(self, delta, meta):
+    #     back = delta * (1-self.Y**2)
+    #     return back, meta
 
     def __repr__(self):
         return "{}()".format(

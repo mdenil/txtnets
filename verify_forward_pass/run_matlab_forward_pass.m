@@ -64,6 +64,13 @@ save('data/debugging_model_params.mat', ...
 
 
 
+train_lbl = train_lbl(:,1); %getting rid of length information for sentences
+test_lbl = test_lbl(:,1);
+valid_lbl = valid_lbl(:,1);
+
+
+
+
 batchsize = 40;
 
 num_batch_epochs = floor(size(train,1)/(batchsize)); %leaves last batch out at an iteration
@@ -146,19 +153,69 @@ for j=1:num_batch_epochs
 
     M_1 = tanh(M_1);
 
-    batch_results{end+1} = permute(reshape(M_1, p(1), p(3), size_mini, p(7)), [3,4,2,1]);
+    % up
+
+    % At outset M_1 axes: d * f * b, w
+    m_1 = reshape( ...
+        permute( ...
+            reshape( ...
+                M_1', ... w, d * f * b
+                map_wdt,p(1)*p(3),size_mini), ... w, d * f, b
+            [2,1,3]), ... d * f, w, b
+        p(1)*p(3),map_wdt*size_mini); % d * f, w * b
+
+
+    %vectorize one-layer model for classification
+
+    M_3 = reshape(...
+        m_1, ...  d * f, w * b
+        p(1)*p(3)*map_wdt,size_mini ... d * f * w, b
+        );
+
+    %%Classification
+    % intercept term for softmax
+    b_w = ones(1,size_mini);
+
+
+    % CR_Z is n_classes x (rep_size+1), the +1 is the bias term
+    % Z is n_classes x batch_size
+    Z = exp(CR_Z*[M_3;b_w]);
+    Z = bsxfun(@rdivide,Z,sum(Z)); % sum acts vertically (over classes here)
+
+
+    
+    
+    
+    
+    % batch_results{end+1} = permute(reshape(M_1, p(1), p(3), size_mini, p(7)), [3,4,2,1]);
+
+    batch_results{end+1} = Z;
+    
+    % ZZ = Z(Z_sub2ind) is a 1xbatch_size matrix where ZZ(i,j) = Z(labels(i), j)
+    % Z_sub2ind = sub2ind(size(Z),labels,(1:size_mini)');
+    % cost = sum(log(Z(Z_sub2ind)));
+    
+    % backproppin'
+    % D_Z = 0-Z;
+    % D_Z(Z_sub2ind) = 1-Z(Z_sub2ind);
+
+    % Z_df = D_Z*[M_3;b_w]';
+
+    % d_z = CR_Z'*D_Z;
+    % D_p = d_z(1:end-1,:);
 
     if mod(j, 100) == 0
         fprintf('.');
     end
-
 end
 
 fprintf('\n');
 
 %%
 
-batch_results = permute(cat(5, batch_results{:}), [5, 1, 2, 3, 4]);
+% batch_results = permute(cat(5, batch_results{:}), [5, 1, 2, 3, 4]);
+
+batch_results = permute(cat(3, batch_results{:}), [3, 1, 2]);
 
 save('data/batch_results_first_layer.mat', 'batch_results');
 

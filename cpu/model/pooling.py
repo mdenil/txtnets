@@ -2,6 +2,8 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+from cpu import space
+
 class KMaxPooling(object):
     def __init__(self, k):
         self.k = k
@@ -11,10 +13,13 @@ class KMaxPooling(object):
     def fprop(self, X, **meta):
         d, f, b, w = X.shape
 
-        X = np.reshape(
-            X,
-            (d * f * b, w)
-        )
+        working_space = space.Space.infer(X, self.input_axes)
+        X, working_space = working_space.transform_axes(X, ['dfb', 'w'])
+
+        # X = np.reshape(
+        #     X,
+        #     (d * f * b, w)
+        # )
 
         # padding_mask has axes [b, w]
         padding_mask = meta['lengths'].reshape((-1,1)) <= np.arange(w)
@@ -38,14 +43,13 @@ class KMaxPooling(object):
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
 
-        X = np.reshape(
-            X,
-            (d, f, b, self.k)
-        )
+        working_space.set_extent(w=self.k)
+        X, working_space = working_space.transform_axes(X, self.output_axes)
 
-        # everything has been truncated to length k
-        #meta['lengths'][:] = self.k
-        # should be:
+        # X = np.reshape(
+        #     X,
+        #     (d, f, b, self.k)
+        # )
 
         # everything has been truncated to length k or smaller
         meta['lengths'] = np.minimum(meta['lengths'], self.k)

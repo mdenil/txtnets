@@ -2,6 +2,8 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+from . import tools
+
 class CSM(object):
     def __init__(self,
                  input_axes,
@@ -19,7 +21,8 @@ class CSM(object):
             if num_layers and layer_index == num_layers:
                 break
 
-            X = self._permute_data(X, current_axes, layer.input_axes)
+            # FIXME: have layers handle their own permutations.  Store current space in meta.
+            X = tools.permute_axes(X, current_axes, layer.input_axes)
             X, meta = layer.fprop(X, **meta)
             current_axes = layer.output_axes
 
@@ -27,24 +30,6 @@ class CSM(object):
             return X, meta
         else:
             return X
-
-    def _permute_data(self, X, current_axes, desired_axes):
-        """
-        Axis types:
-
-        b: batch_size, index over data
-        w: sentence_length, index over words
-        f: n_feature_maps, index over feature maps
-        d: n_input_dimensions, index over dimensions of the input in the non-sentence direction
-        """
-        if current_axes == desired_axes:
-            return X
-
-        assert set(current_axes) == set(desired_axes)
-
-        X = np.transpose(X, [current_axes.index(d) for d in desired_axes])
-
-        return X
 
     @property
     def output_axes(self):

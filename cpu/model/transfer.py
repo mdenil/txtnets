@@ -4,6 +4,8 @@ import numpy as np
 import pyfftw
 import psutil
 
+from cpu import space
+
 pyfftw.interfaces.cache.enable()
 
 class Softmax(object):
@@ -16,26 +18,36 @@ class Softmax(object):
         self.W = 0.05 * np.random.standard_normal(size=(self.n_classes, self.n_input_dimensions))
         self.b = np.zeros(shape=(self.n_classes,1))
 
-        self.input_axes = ['w', 'd', 'f', 'b']
+        self.input_axes = ['w', 'f', 'd', 'b']
         self.output_axes = ['d', 'b']
 
     def fprop(self, X, **meta):
-        w, d, f, b = X.shape
-
-        X = np.reshape(
-            X,
-            (w * d* f, b)
-        )
+        input_space = space.Space.infer(X, self.input_axes)
+        X, working_space = input_space.transform_axes(X, ['wfd', 'b'])
 
         X = np.exp(np.dot(self.W, X) + self.b)
         X /= np.sum(X, axis=0)
 
-        meta['lengths'][:] = self.n_classes
+        meta['lengths'] = np.zeros(meta['lengths'].shape) + self.n_classes
 
         return X, meta
 
-    def bprop(self, Y, **meta):
-        pass
+    def bprop(self, delta, **meta):
+        out = np.dot(self.W.T, delta)
+        return out, meta
+
+    def grads(self, X, delta, **meta):
+        X = self._flatten_axes(X)
+
+        gw = np.dot(delta, X.T)
+        gb = delta.sum(axis=1).reshape(self.b.shape)
+
+        return [gw, gb], meta
+
+    def _flatten_axes(self, X):
+        # TODO: remove references to this and then remove it entirely
+        w, f, d, b = X.shape
+        return np.reshape(X, (w * f * d, b))
 
     def __repr__(self):
         return "{}(W={})".format(
@@ -56,7 +68,8 @@ class SentenceConvolution(object):
         self.n_input_dimensions = n_input_dimensions
         self.n_threads = n_threads
 
-        self.W = 0.05 * np.random.standard_normal(size=(self.n_feature_maps * self.n_input_dimensions, self.kernel_width))
+        self.W = 0.05 * np.random.standard_normal(
+            size=(self.n_feature_maps * self.n_input_dimensions, self.kernel_width))
 
         self.input_axes = ['b', 'd', 'w']
         self.output_axes = ['b', 'f', 'd', 'w']
@@ -67,13 +80,9 @@ class SentenceConvolution(object):
         assert self.n_input_dimensions == d
         f = self.n_feature_maps
 
-        X = np.reshape(
-            np.transpose(
-                np.concatenate([X[np.newaxis]] * f), # f b d w
-                (1, 0, 2, 3)
-            ),
-            (b * f * d, w)
-        )
+        working_space = space.Space.infer(X, self.input_axes)
+        X, working_space = working_space.transform_axes(X, ['bfd', 'w'])
+        X, working_space = working_space.replicate(X, f=f)
 
         K = np.vstack([np.fliplr(self.W)] * b)
         kw = K.shape[1]
@@ -109,9 +118,8 @@ class SentenceConvolution(object):
         # length of a wide convolution
         meta['lengths'] = meta['lengths'] + self.kernel_width - 1
 
-        X = np.reshape(
-            X,
-            (b, f, d, representation_length))
+        working_space.set_extent(w=representation_length)
+        X, working_space = working_space.transform_axes(X, self.output_axes)
 
         return X, meta
 
