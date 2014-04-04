@@ -17,7 +17,7 @@ class Space(object):
         assert len(X.shape) == len(axes)
         return Space(axes, OrderedDict(zip(axes, X.shape)))
 
-    def transform(self, X, new_axes):
+    def transform(self, X, new_axes, **broadcast):
         new_extent = OrderedDict([
             (ax, self._extent.get(ax, 1))
             for ax in _fold_axes(new_axes)])
@@ -39,7 +39,9 @@ class Space(object):
         X = np.transpose(X, [expanded_space.folded_axes.index(d) for d in new_space.folded_axes])
         X = new_space._unfold(X)
 
-        return X, new_space
+        X, broadcast_space = new_space.broadcast(X, **broadcast)
+
+        return X, broadcast_space
 
     def broadcast(self, X, **replicas):
         new_extent = OrderedDict([
@@ -67,8 +69,11 @@ class Space(object):
             space._extent[ax] = ex
         return space
 
-    def get_extent(self, axes):
-        return [self._size_of_axis(ax) for ax in axes]
+    def get_extents(self, axes):
+        return [self.get_extent(ax) for ax in axes]
+
+    def get_extent(self, ax):
+        return int(np.prod([v for k,v in self._extent.iteritems() if k in list(ax)]))
 
     def clone(self):
         return Space(self._axes, self._extent)
@@ -83,10 +88,7 @@ class Space(object):
 
     @property
     def shape(self):
-        return [self._size_of_axis(ax) for ax in self._axes]
-
-    def _size_of_axis(self, ax):
-        return int(np.prod([v for k,v in self._extent.iteritems() if k in list(ax)]))
+        return [self.get_extent(ax) for ax in self._axes]
 
     @property
     def axes(self):

@@ -30,12 +30,6 @@ class CSM(object):
         else:
             return X
 
-    # @property
-    # def output_axes(self):
-    #     if len(self.layers) == 0:
-    #         return None
-    #     return self.layers[-1].output_axes
-
     def __repr__(self):
         return "\n".join([
             "CSM {",

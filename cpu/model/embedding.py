@@ -17,14 +17,13 @@ class WordEmbedding(object):
 
     def fprop(self, X, **meta):
         data_space = meta['data_space']
-
         X, data_space = data_space.transform(X, ['bw', 'd'])
 
         X = self.E[X.ravel()]
 
         data_space = data_space.set_extent(d=self.dimension)
-
         meta['data_space'] = data_space
+
         return X, meta
 
     def __repr__(self):

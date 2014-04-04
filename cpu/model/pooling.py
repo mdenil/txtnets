@@ -10,19 +10,20 @@ class KMaxPooling(object):
 
     def fprop(self, X, **meta):
         # d, f, b, w = X.shape
+        data_space = meta['data_space']
+        lengths = meta['lengths']
 
-        working_space = meta['data_space']
-        X, working_space = working_space.transform(X, ['dfb', 'w'])
-        d, f, b, w = working_space.get_extent(['d', 'f', 'b', 'w'])
+        d, f, b, w = data_space.get_extents(['d', 'f', 'b', 'w'])
 
+        X, data_space = data_space.transform(X, ['dfb', 'w'])
 
-        # padding_mask has axes [b, w]
-        padding_mask = meta['lengths'].reshape((-1,1)) <= np.arange(w)
-        # stack to [d*f*b, w] to match X
-        padding_mask = np.vstack([padding_mask] * (d * f))
+        padding_mask = lengths.reshape((-1,1)) <= np.arange(data_space.get_extent('w'))
+        padding_space = space.Space.infer(padding_mask, ['b', 'w'])
+        padding_mask, padding_space = padding_space.transform(padding_mask, ['dfb', 'w'], d=d, f=f)
 
-        index_mask = meta['lengths'].reshape((-1,1)) <= np.arange(self.k)[::-1]
-        index_mask = np.vstack([index_mask] * (d * f))
+        index_mask = lengths.reshape((-1,1)) <= np.arange(self.k)[::-1]
+        index_space = space.Space.infer(index_mask, ['b', 'w'])
+        index_mask, index_space = index_space.transform(index_mask, ['dfb', 'w'], d=d, f=f)
 
         X[padding_mask] = -np.inf
 
@@ -33,15 +34,18 @@ class KMaxPooling(object):
         index_mask = (k_max_indexes == np.iinfo(k_max_indexes.dtype).max)
         k_max_indexes[index_mask] = 0
 
-        rows = np.vstack([np.arange(d * f * b)] * self.k).T
+        rows = np.vstack([np.arange(data_space.get_extent('dfb'))] * self.k).T
 
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
 
-        meta['data_space'] = working_space.set_extent(w=self.k)
+        data_space = data_space.set_extent(w=self.k)
 
         # everything has been truncated to length k or smaller
-        meta['lengths'] = np.minimum(meta['lengths'], self.k)
+        lengths = np.minimum(lengths, self.k)
+
+        meta['data_space'] = data_space
+        meta['lengths'] = lengths
 
         return X, meta
 
@@ -60,7 +64,7 @@ class SumFolding(object):
     def fprop(self, X, **meta):
         data_space = meta['data_space']
 
-        d, = data_space.get_extent('d')
+        d, = data_space.get_extents('d')
         assert ( d % 2 == 0 )
         folded_size = d / 2
 

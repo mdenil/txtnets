@@ -69,7 +69,7 @@ class SentenceConvolution(object):
         data_space = meta['data_space']
         lengths = meta['lengths']
 
-        b, d, w = data_space.get_extent(['b','d','w'])
+        b, d, w = data_space.get_extents(['b','d','w'])
 
         assert self.n_input_dimensions == d
         f = self.n_feature_maps
@@ -134,8 +134,8 @@ class Bias(object):
     def fprop(self, X, **meta):
         data_space = meta['data_space']
 
-        assert [self.n_input_dims] == data_space.get_extent('d')
-        assert [self.n_feature_maps] == data_space.get_extent('f')
+        assert [self.n_input_dims] == data_space.get_extents('d')
+        assert [self.n_feature_maps] == data_space.get_extents('f')
 
         X, data_space = data_space.transform(X, ['b', 'w', 'f', 'd'])
 
