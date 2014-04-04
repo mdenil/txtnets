@@ -27,14 +27,14 @@ class TestFFTConvolve1D(object):
         actual = conv.fftconv1d(X, K, mode=mode)
         expected = self.reference_convolve(X, K, mode=mode)
 
-        # print actual.shape, expected.shape
-        # print actual
-        # print expected
         assert np.allclose(actual, expected)
 
     def test_fftconv1d(self):
         n_rows = 2
-        for n_x in [10]: #[4, 10]:
+        for n_x in [1, 10]:
             for n_k in [5, 6]:
                 for mode in ['full', 'valid']:
+                    # scipy doesn't accept this mode, and numpy does weird shit so I'm just going to not accept it
+                    if mode == 'valid' and n_x < n_k:
+                        continue
                     yield self._run_fftconv1d, n_x, n_k, mode
