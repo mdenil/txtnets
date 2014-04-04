@@ -4,24 +4,37 @@ import numpy as np
 
 from cpu import conv
 
-# scipy.signal.fftconvolve
+# import unittest
 
-import unittest
+class TestFFTConvolve1D(object):
+    def reference_convolve(self, X, K, mode):
+        rows = []
+        for x, k in zip(X, K):
+            rows.append(
+                np.convolve(x, k, mode=mode)
+            )
+        return np.vstack(rows)
 
-class Convolution(unittest.TestCase):
-    def setUp(self):
-        self.X = np.random.standard_normal(size=(10, 100))
-        self.K = np.random.uniform(size=(10, 6))
+    def check_allclose(self, actual, expected):
+        assert np.allclose(actual, expected)
+
+    def _run_fftconv1d(self, n_x, n_k, mode):
+        n_rows = 2
+
+        X = np.random.standard_normal(size=(n_rows, n_x))
+        K = np.random.uniform(size=(n_rows, n_k))
+
+        actual = conv.fftconv1d(X, K, mode=mode)
+        expected = self.reference_convolve(X, K, mode=mode)
+
+        # print actual.shape, expected.shape
+        # print actual
+        # print expected
+        assert np.allclose(actual, expected)
 
     def test_fftconv1d(self):
-        actual = conv.fftconv1d(self.X, self.K)
-
-        rows = []
-        for x, k in zip(self.X, self.K):
-            rows.append(
-                np.convolve(x, k, mode='full')
-            )
-
-        expected = np.vstack(rows)
-
-        assert np.allclose(actual, expected)
+        n_rows = 2
+        for n_x in [10]: #[4, 10]:
+            for n_k in [5, 6]:
+                for mode in ['full', 'valid']:
+                    yield self._run_fftconv1d, n_x, n_k, mode
