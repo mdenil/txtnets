@@ -76,7 +76,7 @@ class Space(object):
         return int(np.prod([v for k,v in self._extent.iteritems() if k in list(ax)]))
 
     def clone(self):
-        return Space(self._axes, self._extent)
+        return Space(list(self._axes), OrderedDict(self._extent))
 
     @property
     def size(self):
@@ -97,3 +97,6 @@ class Space(object):
     @property
     def folded_axes(self):
         return _fold_axes(self.axes)
+
+    def is_compatable_shape(self, X):
+        return X.shape == self.shape

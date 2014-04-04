@@ -1,12 +1,13 @@
 __author__ = 'mdenil'
 
 import numpy as np
-import pyfftw
 import psutil
 
 from cpu import space
+from cpu import conv
 
-pyfftw.interfaces.cache.enable()
+# FIXME: "n_input_dimensions" means different things in Softmax and Bias (and possibly elsewhere)
+# FIXME: grads() functions really don't need to return metas
 
 class Softmax(object):
     def __init__(self,
@@ -29,23 +30,22 @@ class Softmax(object):
 
         return X, meta
 
-    def bprop(self, delta, **meta):
+    def bprop(self, Y, delta, **meta):
         out = np.dot(self.W.T, delta)
         return out, meta
 
     def grads(self, X, delta, **meta):
-        X = self._flatten_axes(X)
+        data_space = meta['data_space']
+        X, data_space = data_space.transform(X, ['wfd', 'b'])
 
         gw = np.dot(delta, X.T)
         gb = delta.sum(axis=1).reshape(self.b.shape)
-
         return [gw, gb], meta
 
     def __repr__(self):
         return "{}(W={})".format(
             self.__class__.__name__,
             self.W.shape)
-
 
 class SentenceConvolution(object):
     def __init__(self,
@@ -78,33 +78,8 @@ class SentenceConvolution(object):
         X, data_space = data_space.broadcast(X, f=f)
 
         K, _ = self._kernel_space.broadcast(np.fliplr(self.W), b=b)
-        kw = K.shape[1]
 
-        # pad
-
-        if w >= kw:
-            p = int((w - kw) / 2)
-            K = np.concatenate([
-                np.zeros((K.shape[0], p)), K, np.zeros((K.shape[0], p))
-            ], axis=1)
-        else:
-            p = int((kw - w) / 2)
-            X = np.concatenate([
-                np.zeros((X.shape[0], p)), X, np.zeros((X.shape[0], p))
-            ], axis=1)
-
-        # compute
-
-        X = np.concatenate([X, np.zeros_like(X)], axis=1)
-        K = np.concatenate([K, np.zeros_like(K)], axis=1)
-
-        X = pyfftw.interfaces.numpy_fft.fft(X, axis=1, threads=self.n_threads)
-        K = pyfftw.interfaces.numpy_fft.fft(K, axis=1, threads=self.n_threads)
-        X = pyfftw.interfaces.numpy_fft.ifft(X*K, axis=1, threads=self.n_threads).real
-
-        # trim
-
-        X = X[:, p:-1-p]
+        X = conv.fftconv1d(X, K, n_threads=self.n_threads)
 
         representation_length = X.shape[1]
 
@@ -139,11 +114,22 @@ class Bias(object):
 
         X, data_space = data_space.transform(X, ['b', 'w', 'f', 'd'])
 
-        X += self.b
+        X = X + self.b
 
         meta['data_space'] = data_space
 
         return X, meta
+
+    def bprop(self, Y, delta, **meta):
+        return delta, meta
+
+    def grads(self, X, delta, **meta):
+        data_space = meta['data_space']
+
+        delta, data_space = data_space.transform(delta, ['f', 'd', 'bw'])
+        grad = delta.sum(axis=2)
+
+        return [grad], meta
 
     def __repr__(self):
         return "{}(n_input_dims={}, n_feature_maps={})".format(

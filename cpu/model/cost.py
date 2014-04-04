@@ -16,7 +16,6 @@ class CrossEntropy(object):
 
     def bprop(self, Y, Y_true, **meta):
         back = Y - Y_true
-
         return back, meta
 
     def __repr__(self):
