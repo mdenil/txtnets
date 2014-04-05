@@ -73,12 +73,15 @@ def run():
     csm = load_testing_model("verify_forward_pass/data/debugging_model_params.mat")
     n_batches_per_epoch = int(data['train'].shape[0] / batch_size)
     matlab_results = scipy.io.loadmat("verify_forward_pass/data/batch_results_first_layer.mat")['batch_results']
-    progress_bar = pyprind.ProgPercent(n_batches_per_epoch)
     total_errs_big = 0
     total_errs_small = 0
     total_checked = 0
 
+    ##
+
     cost_function = model.cost.CrossEntropy()
+
+    progress_bar = pyprind.ProgPercent(n_batches_per_epoch)
 
     for batch_index in xrange(n_batches_per_epoch):
 
