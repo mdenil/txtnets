@@ -7,9 +7,6 @@ import unittest
 from cpu import model
 from cpu import space
 
-# FIXME: it would be great to test layers by themselves instead of involving a cost function on top
-# FIXME: Honestly, I don't think grads needs X, likely doesn't need Y either (don't need to store in model either)
-
 class Softmax(unittest.TestCase):
     def setUp(self):
         # X = ['w', 'f', 'd', 'b']
@@ -18,7 +15,7 @@ class Softmax(unittest.TestCase):
         self.n_input_dimensions = w*f*d
         self.n_classes = 7
 
-        self.model = model.transfer.Softmax(
+        self.layer = model.transfer.Softmax(
             n_classes=self.n_classes,
             n_input_dimensions=self.n_input_dimensions)
 
@@ -28,11 +25,11 @@ class Softmax(unittest.TestCase):
 
         self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
 
-        self.meta = {'lengths': np.zeros(b) + w, 'data_space': self.X_space}
+        self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
     def test_fprop(self):
-        actual, _ = self.model.fprop(self.X, **self.meta)
-        expected = np.exp(np.dot(self.model.W, self.X.reshape((self.n_input_dimensions, -1))) + self.model.b)
+        actual, _, _ = self.layer.fprop(self.X, meta=self.meta)
+        expected = np.exp(np.dot(self.layer.W, self.X.reshape((self.n_input_dimensions, -1))) + self.layer.b)
         expected /= np.sum(expected, axis=0)
 
         assert np.allclose(actual, expected)
@@ -42,15 +39,15 @@ class Softmax(unittest.TestCase):
 
         def func(x):
             x = x.reshape(self.X.shape)
-            Y, _ = self.model.fprop(x, **self.meta)
+            Y, _, _ = self.layer.fprop(x, meta=self.meta)
             c,_ = cost.fprop(Y, self.Y)
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, _ = self.model.fprop(X, **self.meta)
+            Y, meta, fprop_state = self.layer.fprop(X, self.meta)
             delta, _ = cost.bprop(Y, self.Y)
-            delta, _ = self.model.bprop(X, delta)
+            delta, _ = self.layer.bprop(X, delta, meta=meta, fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
@@ -59,39 +56,39 @@ class Softmax(unittest.TestCase):
         cost = model.cost.CrossEntropy()
 
         def func(w):
-            self.model.W = w.reshape(self.model.W.shape)
-            Y, _ = self.model.fprop(self.X, **self.meta)
+            self.layer.W = w.reshape(self.layer.W.shape)
+            Y, _, _ = self.layer.fprop(self.X, meta=self.meta)
             c,_ = cost.fprop(Y, self.Y)
             return c
 
         def grad(w):
-            self.model.W = w.reshape(self.model.W.shape)
-            Y, _ = self.model.fprop(self.X, **self.meta)
+            self.layer.W = w.reshape(self.layer.W.shape)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
             delta, _ = cost.bprop(Y, self.Y)
-            [gw, _], _ = self.model.grads(self.X, delta, **self.meta)
+            [grad_W, _] = self.layer.grads(self.X, delta, meta=meta, fprop_state=fprop_state)
 
-            return gw.ravel()
+            return grad_W.ravel()
 
-        assert scipy.optimize.check_grad(func, grad, self.model.W.ravel()) < 1e-5
+        assert scipy.optimize.check_grad(func, grad, self.layer.W.ravel()) < 1e-5
 
     def test_grad_b(self):
         cost = model.cost.CrossEntropy()
 
         def func(b):
-            self.model.b = b.reshape(self.model.b.shape)
-            Y, _ = self.model.fprop(self.X, **self.meta)
+            self.layer.b = b.reshape(self.layer.b.shape)
+            Y, _, _ = self.layer.fprop(self.X, meta=self.meta)
             c,_ = cost.fprop(Y, self.Y)
             return c
 
         def grad(b):
-            self.model.b = b.reshape(self.model.b.shape)
-            Y, _ = self.model.fprop(self.X, **self.meta)
+            self.layer.b = b.reshape(self.layer.b.shape)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
             delta, _ = cost.bprop(Y, self.Y)
-            [_, gb], meta = self.model.grads(self.X, delta, **self.meta)
+            [_, grad_b] = self.layer.grads(self.X, delta, meta=meta, fprop_state=fprop_state)
 
-            return gb.ravel()
+            return grad_b.ravel()
 
-        assert scipy.optimize.check_grad(func, grad, self.model.b.ravel()) < 1e-5
+        assert scipy.optimize.check_grad(func, grad, self.layer.b.ravel()) < 1e-5
 
 
 
@@ -111,7 +108,7 @@ class Bias(unittest.TestCase):
         self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
 
         self.X_space = space.Space.infer(self.X, ['b', 'w', 'f', 'd'])
-        self.meta = {'lengths': np.zeros(b) + w, 'data_space': self.X_space}
+        self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
         self.csm = model.model.CSM(
             input_axes=['b', 'w', 'f', 'd'],
@@ -125,7 +122,7 @@ class Bias(unittest.TestCase):
 
 
     def test_fprop(self):
-        actual, _ = self.layer.fprop(self.X.copy(), **self.meta)
+        actual, _ = self.layer.fprop(self.X.copy(), meta=self.meta)
         expected = self.X + self.layer.b
 
         assert np.allclose(actual, expected)
@@ -133,15 +130,15 @@ class Bias(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x.copy(), **self.meta)
+            Y = self.csm.fprop(x.copy(), meta=self.meta)
             c,_ = self.cost.fprop(Y.copy(), self.Y.copy())
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y = self.csm.fprop(X.copy(), **self.meta)
+            Y, meta, fprop_state = self.csm.fprop(X.copy(), meta=self.meta, return_meta=True, return_state=True)
             delta, _ = self.cost.bprop(Y.copy(), self.Y.copy())
-            delta = self.csm.bprop(delta)
+            delta = self.csm.bprop(delta, fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
@@ -150,16 +147,16 @@ class Bias(unittest.TestCase):
 
         def func(b):
             self.layer.b = b.reshape(self.layer.b.shape)
-            Y, _ = self.layer.fprop(self.X.copy(), **self.meta)
+            Y, _ = self.layer.fprop(self.X.copy(), meta=self.meta)
             c = Y.sum()
             return Y.sum()
 
         def grad(b):
             self.layer.b = b.reshape(self.layer.b.shape)
 
-            Y, meta = self.layer.fprop(self.X.copy(), **self.meta)
+            Y, meta = self.layer.fprop(self.X.copy(), meta=self.meta)
             delta = np.ones_like(Y)
-            [gb], _ = self.layer.grads(self.X.copy(), delta, **meta)
+            [gb] = self.layer.grads(self.X.copy(), delta, meta=meta)
 
             return gb.ravel()
 

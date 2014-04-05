@@ -15,14 +15,13 @@ class WordEmbedding(object):
 
         self.E = 0.05 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
-    def fprop(self, X, **meta):
-        data_space = meta['data_space']
-        X, data_space = data_space.transform(X, ['bw', 'd'])
+    def fprop(self, X, meta):
+        working_space = meta['space_below']
+        X, working_space = working_space.transform(X, ['bw', 'd'])
 
         X = self.E[X.ravel()]
 
-        data_space = data_space.set_extent(d=self.dimension)
-        meta['data_space'] = data_space
+        meta['space_above'] = working_space.with_extent(d=self.dimension)
 
         return X, meta
 

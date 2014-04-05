@@ -7,8 +7,6 @@ import unittest
 from cpu import model
 from cpu import space
 
-# FIXME: test_bprop is identical for many different tests... can probably be shared.
-
 class KMaxPooling(unittest.TestCase):
     def setUp(self):
         w,f,d,b = 6, 1, 1, 5
@@ -20,7 +18,7 @@ class KMaxPooling(unittest.TestCase):
         self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
 
         self.layer = model.pooling.KMaxPooling(k=self.k)
-        self.meta = {'data_space': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
+        self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
 
         self.csm = model.model.CSM(
             input_axes=['d', 'f', 'b', 'w'],
@@ -38,15 +36,15 @@ class KMaxPooling(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x, **self.meta)
+            Y = self.csm.fprop(x, meta=self.meta)
             c,_ = self.cost.fprop(Y, self.Y)
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y = self.csm.fprop(X, **self.meta)
+            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_meta=True, return_state=True)
             delta, _ = self.cost.bprop(Y, self.Y)
-            delta = self.csm.bprop(delta)
+            delta = self.csm.bprop(delta, fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
@@ -63,7 +61,7 @@ class SumFolding(unittest.TestCase):
         self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
 
         self.layer = model.pooling.SumFolding()
-        self.meta = {'data_space': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
+        self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
 
         self.csm = model.model.CSM(
             input_axes=['d', 'f', 'b', 'w'],
@@ -81,15 +79,15 @@ class SumFolding(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x, **self.meta)
+            Y = self.csm.fprop(x, meta=self.meta)
             c,_ = self.cost.fprop(Y, self.Y)
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y = self.csm.fprop(X, **self.meta)
+            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_meta=True, return_state=True)
             delta, _ = self.cost.bprop(Y, self.Y)
-            delta = self.csm.bprop(delta)
+            delta = self.csm.bprop(delta, fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5

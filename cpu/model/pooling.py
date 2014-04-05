@@ -8,22 +8,18 @@ class KMaxPooling(object):
     def __init__(self, k):
         self.k = k
 
-    def fprop(self, X, **meta):
-        # d, f, b, w = X.shape
-        data_space = meta['data_space']
+    def fprop(self, X, meta):
+        working_space = meta['space_below']
         lengths = meta['lengths']
 
         # FIXME: this is a hack to guarantee statelessness
         X = X.copy()
 
-        # FIXME: this object should be stateless, but right now I need to know these things for backprop
-        self.space_below = data_space
+        d, f, b, w = working_space.get_extents(['d', 'f', 'b', 'w'])
 
-        d, f, b, w = data_space.get_extents(['d', 'f', 'b', 'w'])
+        X, working_space = working_space.transform(X, ['dfb', 'w'])
 
-        X, data_space = data_space.transform(X, ['dfb', 'w'])
-
-        padding_mask = lengths.reshape((-1,1)) <= np.arange(data_space.get_extent('w'))
+        padding_mask = lengths.reshape((-1,1)) <= np.arange(working_space.get_extent('w'))
         padding_space = space.Space.infer(padding_mask, ['b', 'w'])
         padding_mask, padding_space = padding_space.transform(padding_mask, ['dfb', 'w'], d=d, f=f)
 
@@ -41,48 +37,50 @@ class KMaxPooling(object):
         k_max_indexes[index_mask] = 0
 
         # FIXME: this object should be stateless, but right now I need to know these things for backprop
-        self.space_below = data_space
-        self.k_max_indexes = k_max_indexes
-        self.index_mask = index_mask
+        # self.space_below = working_space
+        # self.k_max_indexes = k_max_indexes
+        # self.index_mask = index_mask
 
-        rows = np.vstack([np.arange(data_space.get_extent('dfb'))] * self.k).T
+        # save these for backprop
+        fprop_state = {}
+        fprop_state['k_max_indexes'] = k_max_indexes
+        fprop_state['index_mask'] = index_mask
+
+        rows = np.vstack([np.arange(working_space.get_extent('dfb'))] * self.k).T
 
         # print X.shape
 
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
 
-        data_space = data_space.set_extent(w=self.k)
+        working_space = working_space.with_extent(w=self.k)
 
         # everything has been truncated to length k or smaller
         lengths = np.minimum(lengths, self.k)
 
-        meta['data_space'] = data_space
+        meta['space_above'] = working_space
         meta['lengths'] = lengths
 
-        return X, meta
+        return X, meta, fprop_state
 
-    def bprop(self, X, delta, **meta):
+    def bprop(self, X, delta, meta, fprop_state):
 
-        # FIXME: bprop should know state_above and state_below
-        # Can't always infer state_below because of layers like this one (k-max pooling).  We know k here but
-        # we don't know how big the space that we pooled over was, because we pooled down to k.
-
-        space_above = meta['data_space']
-
-        delta, _ = space_above.transform(delta, ['dfb', 'w'])
-
-        rows = np.vstack([np.arange(self.space_below.get_extent('dfb'))] * self.k).T
-        back = np.zeros(self.space_below.shape)
-        back, working_space = self.space_below.transform(back, ['dfb', 'w'])
+        space_below = meta['space_below']
+        space_above = meta['space_above']
 
         # mask for the values to keep from delta
-        index_mask = np.logical_not(self.index_mask)
+        index_mask = np.logical_not(fprop_state['index_mask'])
+        k_max_indexes = fprop_state['k_max_indexes']
 
-        back[rows[index_mask], self.k_max_indexes[index_mask]] = delta[index_mask]
+        delta, working_space = space_above.transform(delta, ['dfb', 'w'])
 
-        # FIXME: this is a hack, something external should keep track of spaces above and below
-        meta['data_space'] = working_space
+        rows = np.vstack([np.arange(space_below.get_extent('dfb'))] * self.k).T
+        back = np.zeros(space_below.shape)
+        back, _ = space_below.transform(back, ['dfb', 'w'])
+
+        back[rows[index_mask], k_max_indexes[index_mask]] = delta[index_mask]
+
+        meta['space_below'] = working_space
 
         return back, meta
 
@@ -98,28 +96,28 @@ class SumFolding(object):
     def __init__(self):
         pass
 
-    def fprop(self, X, **meta):
-        data_space = meta['data_space']
+    def fprop(self, X, meta):
+        working_space = meta['space_below']
 
-        d, = data_space.get_extents('d')
+        d, = working_space.get_extents('d')
         assert ( d % 2 == 0 )
         folded_size = d / 2
 
-        X, data_space = data_space.transform(X, ['d', 'b', 'f', 'w'])
+        X, working_space = working_space.transform(X, ['d', 'b', 'f', 'w'])
 
         X = X[:folded_size] + X[folded_size:]
 
-        data_space = data_space.set_extent(d=folded_size)
-        meta['data_space'] = data_space
+        working_space = working_space.with_extent(d=folded_size)
+        meta['space_above'] = working_space
         return X, meta
 
-    def bprop(self, X, delta, **meta):
-        data_space = meta['data_space']
+    def bprop(self, X, delta, meta, fprop_state):
+        working_space = meta['space_above']
 
-        delta, data_space = data_space.broadcast(delta, d=2)
+        delta, working_space = working_space.broadcast(delta, d=2)
 
-        meta['data_space'] = data_space
-        return delta, data_space
+        meta['space_below'] = working_space
+        return delta, meta
 
     def __repr__(self):
         return "{}()".format(

@@ -57,13 +57,33 @@ class Space(object):
 
         return X, new_space
 
+    def without_axes(self, axes_to_drop):
+        space = self.clone()
+
+        axes_to_drop = list(axes_to_drop)
+
+        for ax in axes_to_drop:
+            assert ax in space._extent
+            del space._extent[ax]
+
+        new_axes = []
+        for ax in space._axes:
+            folded = _fold_axes(ax)
+            folded = [f for f in folded if f not in axes_to_drop]
+            new_axes.append(''.join(folded))
+
+        space._axes = new_axes
+
+        return space
+
+
     def _fold(self, X):
         return np.reshape(X, self.folded_shape)
 
     def _unfold(self, X):
         return np.reshape(X, self.shape)
 
-    def set_extent(self, **extents):
+    def with_extent(self, **extents):
         space = self.clone()
         for ax,ex in extents.iteritems():
             space._extent[ax] = ex
@@ -99,4 +119,4 @@ class Space(object):
         return _fold_axes(self.axes)
 
     def is_compatable_shape(self, X):
-        return X.shape == self.shape
+        return all(a == b for a,b in zip(X.shape, self.shape)) and len(X.shape) == len(self.shape)

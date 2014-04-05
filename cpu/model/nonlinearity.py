@@ -6,11 +6,11 @@ class Relu(object):
     def __init__(self):
         pass
 
-    def fprop(self, X, **meta):
+    def fprop(self, X, meta):
         Y = np.maximum(0, X)
         return Y, meta
 
-    def bprop(self, Y, delta, **meta):
+    def bprop(self, Y, delta, meta, fprop_state):
         back = delta * (Y > 0)
         return back, meta
 
@@ -24,11 +24,11 @@ class Tanh(object):
     def __init__(self):
         pass
 
-    def fprop(self, X, **meta):
+    def fprop(self, X, meta):
         X = np.tanh(X)
         return X, meta
 
-    def bprop(self, Y, delta, **meta):
+    def bprop(self, Y, delta, meta, fprop_state):
         back = delta * (1-Y**2)
         return back, meta
 

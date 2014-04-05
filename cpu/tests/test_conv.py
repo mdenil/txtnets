@@ -30,7 +30,6 @@ class TestFFTConvolve1D(object):
         assert np.allclose(actual, expected)
 
     def test_fftconv1d(self):
-        n_rows = 2
         for n_x in [1, 10]:
             for n_k in [5, 6]:
                 for mode in ['full', 'valid']:
