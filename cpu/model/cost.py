@@ -18,9 +18,10 @@ class CrossEntropy(object):
 
 
     def bprop(self, Y, Y_true, meta, fprop_state):
-        back = Y - Y_true
+        # delta = Y - Y_true
+        delta = - Y_true / Y + (1-Y_true) / (1-Y)
         meta['space_below'] = fprop_state['input_space']
-        return back, meta
+        return delta, meta
 
     def __repr__(self):
         return "{}()".format(

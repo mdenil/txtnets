@@ -18,6 +18,9 @@ class Space(object):
         return Space(axes, OrderedDict(zip(axes, X.shape)))
 
     def transform(self, X, new_axes, **broadcast):
+        if not self.is_compatable_shape(X):
+            raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, self))
+
         new_extent = OrderedDict([
             (ax, self._extent.get(ax, 1))
             for ax in _fold_axes(new_axes)])
@@ -44,6 +47,9 @@ class Space(object):
         return X, broadcast_space
 
     def broadcast(self, X, **replicas):
+        if not self.is_compatable_shape(X):
+            raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, self))
+
         new_extent = OrderedDict([
             (ax, self._extent[ax]*replicas.get(ax, 1))
             for ax in _fold_axes(self.axes)])
@@ -121,7 +127,37 @@ class Space(object):
         return _fold_axes(self.axes)
 
     def is_compatable_shape(self, X):
-        return all(a == b for a,b in zip(X.shape, self.shape)) and len(X.shape) == len(self.shape)
+        # return all(a == b for a,b in zip(X.shape, self.shape)) and len(X.shape) == len(self.shape)
+
+        # Compatable is not just having the same shape.  The space is also allowed to include extra dimensions as long
+        # as they have size 1, so a matrix of shape (10, 4) is compatable with a space of shape (10, 1, 4) or (1, 10, 4),
+        # etc, but is _not_ compatable with a space of shape (4, 10).  However, a space must describe every dimension of
+        # the data, so a space with shape (10, 4) is _not_ compatable with a matrix of shape (10, 1, 4) even though the
+        # reverse is true.
+
+        data_extents = X.shape
+        self_extents = self.shape
+
+        d = 0
+        s = 0
+        while d < len(data_extents) and s < len(self_extents):
+            de = data_extents[d]
+            se = self_extents[s]
+
+            if de != se:
+                while se == 1 and s < len(self_extents):
+                    s += 1
+                    se = self_extents[s]
+            if de != se:
+                return False
+
+            d += 1
+            s += 1
+
+        if d < len(data_extents) or s < len(self_extents):
+            return False
+
+        return True
 
     def __repr__(self):
         return "{}(axes={}, extent=[{}])".format(

@@ -18,42 +18,46 @@ class Softmax(layer.Layer):
         self.b = np.zeros(shape=(self.n_classes,1))
 
     def fprop(self, X, meta):
-        working_space = meta['space_below']
-        X, working_space = working_space.transform(X, ['wfd', 'b'])
+        X, X_space = meta['space_below'].transform(X, ['wfd', 'b'])
 
-        fprop_state = {
-            'input_space': meta['space_below'],
-            'X': X,
-        }
+        Y = np.exp(np.dot(self.W, X) + self.b)
+        Y /= np.sum(Y, axis=0)
 
-        X = np.exp(np.dot(self.W, X) + self.b)
-        X /= np.sum(X, axis=0)
-
-        working_space = working_space.without_axes('wf')
-        working_space = working_space.with_extent(d=self.n_classes)
+        Y_space = X_space.without_axes('wf')
+        Y_space = Y_space.with_extent(d=self.n_classes)
 
         meta['lengths'] = np.zeros(meta['lengths'].shape) + self.n_classes
-        meta['space_above'] = working_space
+        meta['space_above'] = Y_space
 
-        return X, meta, fprop_state
+        fprop_state = {
+            'X_space': X_space,
+            'X': X,
+            'Y': Y,
+        }
+
+        return Y, meta, fprop_state
 
     def bprop(self, delta, meta, fprop_state):
-        out = np.dot(self.W.T, delta)
-        meta['space_below'] = fprop_state['input_space']
+        Y = fprop_state['Y']
+
+        out = np.dot(self.W.T, delta * Y * (1-Y))
+
+        meta['space_below'] = fprop_state['X_space']
         return out, meta
 
     def grads(self, delta, meta, fprop_state):
-        # FIXME: This is still not right.  This and cost both compute parts of the derivative but they don't compute
-        # their own parts.
         X = fprop_state['X']
-        X_space = fprop_state['input_space']
+        Y = fprop_state['Y']
+        X_space = fprop_state['X_space']
         X, X_space = X_space.transform(X, ['wfd', 'b'])
 
-        # print meta['space_above'], delta.shape
-        # delta, delta_space = meta['space_above'].transform(delta, ['wfd', 'b'])
+        delta, delta_space = meta['space_above'].transform(delta, ['wfd', 'b'])
+
+        delta = delta * Y * (1-Y)
 
         grad_W = np.dot(delta, X.T)
         grad_b = delta.sum(axis=1).reshape(self.b.shape)
+
         return [grad_W, grad_b]
 
     def params(self):

@@ -19,16 +19,14 @@ class WordEmbedding(layer.Layer):
         self.E = 0.05 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
     def fprop(self, X, meta):
-        working_space = meta['space_below']
-
-        X, working_space = working_space.transform(X, ['bw', 'd'])
+        X, X_space = meta['space_below'].transform(X, ['bw', 'd'])
 
         Y = self.E[X.ravel()]
 
-        meta['space_above'] = working_space.with_extent(d=self.dimension)
+        meta['space_above'] = X_space.with_extent(d=self.dimension)
         fprop_state = {
-            'input_space': meta['space_below'],
-            'embedding_space': meta['space_above'],
+            'X_space': X_space,
+            'Y_space': meta['space_above'],
             'X': X,
             'Y': Y,
         }
@@ -40,7 +38,7 @@ class WordEmbedding(layer.Layer):
 
         delta_space = meta['space_above']
 
-        delta, delta_space = delta_space.transform(delta, fprop_state['embedding_space'].axes)
+        delta, delta_space = delta_space.transform(delta, fprop_state['Y_space'].axes)
 
         delta = np.sum(Y * delta, axis=1)
         delta_space = delta_space.without_axes('d')
@@ -53,14 +51,14 @@ class WordEmbedding(layer.Layer):
     def grads(self, delta, meta, fprop_state):
         delta_space = meta['space_above']
         X = fprop_state['X']
-        X_space = fprop_state['input_space']
+        X_space = fprop_state['X_space']
 
         delta, delta_space = delta_space.transform(delta, ['bw', 'd'])
         X, X_space = X_space.transform(X, ['bw', 'd'])
 
         grad_E = np.zeros_like(self.E)
-        for i in X.ravel():
-            grad_E[i] += delta[i]
+        for i,j in enumerate(X.ravel()):
+            grad_E[j] += delta[i]
 
         return [grad_E]
 

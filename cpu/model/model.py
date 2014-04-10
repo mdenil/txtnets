@@ -19,6 +19,9 @@ class CSM(layer.Layer):
             assert input_axes is not None
             meta['space_below'] = space.Space.infer(X, input_axes)
 
+        if not meta['space_below'].is_compatable_shape(X):
+            raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, meta['space_below']))
+
         layer_fprop_states = []
 
         for layer_index, layer in enumerate(self.layers):
@@ -39,6 +42,9 @@ class CSM(layer.Layer):
 
             if 'space_above' not in meta:
                 meta['space_above'] = meta['space_below']
+
+            if not meta['space_above'].is_compatable_shape(X):
+                raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, meta['space_above']))
 
             layer_fprop_states.append(layer_fprop_state)
 

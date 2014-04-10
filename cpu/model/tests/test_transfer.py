@@ -39,16 +39,16 @@ class Softmax(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.layer.fprop(x, meta=self.meta)
-            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+            Y, meta, fprop_state = self.layer.fprop(x, meta=dict(self.meta))
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.layer.fprop(X, self.meta)
-            cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
-            delta, meta = self.cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
-            delta, _ = self.layer.bprop(delta, meta=meta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
+            delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
+            delta, _ = self.layer.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5

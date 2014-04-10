@@ -10,7 +10,8 @@ from cpu import space
 class WordEmbedding(unittest.TestCase):
     def setUp(self):
         d = 10
-        vocabulary_size = 10
+        # vocabulary size should be at least as big as the number of words to catch indexing errors
+        vocabulary_size = 30
 
         self.layer = model.embedding.WordEmbedding(
             dimension=d,
@@ -46,4 +47,4 @@ class WordEmbedding(unittest.TestCase):
 
             return grad_E.ravel()
 
-        assert scipy.optimize.check_grad(func, grad, self.layer.E.ravel()) < 1e-5
+        assert scipy.optimize.check_grad(func, grad, self.layer.E.ravel()) < 1e-7
