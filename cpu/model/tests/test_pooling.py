@@ -9,26 +9,13 @@ from cpu import space
 
 class KMaxPooling(unittest.TestCase):
     def setUp(self):
-        w,f,d,b = 6, 1, 1, 5
+        w,f,d,b = 10, 2, 3, 5
         self.k = 4
-        self.n_classes = 7
         self.X = np.random.standard_normal(size=(d,f,b,w))
         self.X_space = space.Space.infer(self.X, ['d', 'f', 'b', 'w'])
-        self.Y = np.random.randint(0, self.n_classes, size=b)
-        self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
 
         self.layer = model.pooling.KMaxPooling(k=self.k)
         self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
-
-        self.csm = model.model.CSM(
-            input_axes=['d', 'f', 'b', 'w'],
-            layers=[
-                self.layer,
-                model.transfer.Softmax(
-                    n_classes=self.n_classes,
-                    n_input_dimensions=self.k*f*d),
-                ])
-        self.cost = model.cost.CrossEntropy()
 
     def test_fprop(self):
         self.skipTest("WRITEME")
@@ -36,15 +23,14 @@ class KMaxPooling(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x, meta=self.meta)
-            c,_ = self.cost.fprop(Y, self.Y)
-            return c
+            Y, meta, fprop_state = self.layer.fprop(x, meta=dict(self.meta))
+            return Y.sum()
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_meta=True, return_state=True)
-            delta, _ = self.cost.bprop(Y, self.Y)
-            delta = self.csm.bprop(delta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            delta, meta = self.layer.bprop(np.ones_like(Y), meta=dict(meta), fprop_state=fprop_state)
+            delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
@@ -54,24 +40,12 @@ class KMaxPooling(unittest.TestCase):
 class SumFolding(unittest.TestCase):
     def setUp(self):
         w,f,d,b = 3, 1, 20, 3
-        self.n_classes = 7
         self.X = np.random.standard_normal(size=(d,f,b,w))
         self.X_space = space.Space.infer(self.X, ['d', 'f', 'b', 'w'])
-        self.Y = np.random.randint(0, self.n_classes, size=b)
-        self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
 
         self.layer = model.pooling.SumFolding()
         self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
 
-        self.csm = model.model.CSM(
-            input_axes=['d', 'f', 'b', 'w'],
-            layers=[
-                self.layer,
-                model.transfer.Softmax(
-                    n_classes=self.n_classes,
-                    n_input_dimensions=w*f*d / 2),
-                ])
-        self.cost = model.cost.CrossEntropy()
 
     def test_fprop(self):
         self.skipTest("WRITEME")
@@ -79,15 +53,14 @@ class SumFolding(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x, meta=self.meta)
-            c,_ = self.cost.fprop(Y, self.Y)
-            return c
+            Y, meta, fprop_state = self.layer.fprop(x, meta=dict(self.meta))
+            return Y.sum()
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_meta=True, return_state=True)
-            delta, _ = self.cost.bprop(Y, self.Y)
-            delta = self.csm.bprop(delta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            delta, meta = self.layer.bprop(np.ones_like(Y), meta=dict(meta), fprop_state=fprop_state)
+            delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5

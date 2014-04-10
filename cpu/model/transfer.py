@@ -5,8 +5,9 @@ import psutil
 
 from cpu import space
 from cpu import conv
+from cpu.model import layer
 
-class Softmax(object):
+class Softmax(layer.Layer):
     def __init__(self,
                  n_classes,
                  n_input_dimensions):
@@ -20,7 +21,10 @@ class Softmax(object):
         working_space = meta['space_below']
         X, working_space = working_space.transform(X, ['wfd', 'b'])
 
-        fprop_state = {'input_space': working_space }
+        fprop_state = {
+            'input_space': meta['space_below'],
+            'X': X,
+        }
 
         X = np.exp(np.dot(self.W, X) + self.b)
         X /= np.sum(X, axis=0)
@@ -33,25 +37,34 @@ class Softmax(object):
 
         return X, meta, fprop_state
 
-    def bprop(self, Y, delta, meta, fprop_state):
+    def bprop(self, delta, meta, fprop_state):
         out = np.dot(self.W.T, delta)
         meta['space_below'] = fprop_state['input_space']
         return out, meta
 
-    def grads(self, X, delta, meta, fprop_state):
-        working_space = meta['space_below']
-        X, working_space = working_space.transform(X, ['wfd', 'b'])
+    def grads(self, delta, meta, fprop_state):
+        # FIXME: This is still not right.  This and cost both compute parts of the derivative but they don't compute
+        # their own parts.
+        X = fprop_state['X']
+        X_space = fprop_state['input_space']
+        X, X_space = X_space.transform(X, ['wfd', 'b'])
+
+        # print meta['space_above'], delta.shape
+        # delta, delta_space = meta['space_above'].transform(delta, ['wfd', 'b'])
 
         grad_W = np.dot(delta, X.T)
         grad_b = delta.sum(axis=1).reshape(self.b.shape)
         return [grad_W, grad_b]
+
+    def params(self):
+        return [self.W, self.b]
 
     def __repr__(self):
         return "{}(W={})".format(
             self.__class__.__name__,
             self.W.shape)
 
-class SentenceConvolution(object):
+class SentenceConvolution(layer.Layer):
     def __init__(self,
                  n_feature_maps,
                  kernel_width,
@@ -72,6 +85,11 @@ class SentenceConvolution(object):
     def fprop(self, X, meta):
         working_space = meta['space_below']
         lengths = meta['lengths']
+
+        fprop_state = {
+            'input_space': working_space,
+            'X': X,
+        }
 
         b, d, w = working_space.get_extents(['b','d','w'])
 
@@ -95,7 +113,53 @@ class SentenceConvolution(object):
         meta['space_above'] = working_space
         meta['lengths'] = lengths
 
-        return X, meta
+        return X, meta, fprop_state
+
+    def bprop(self, delta, meta, fprop_state):
+        working_space = meta['space_above']
+        lengths = meta['lengths']
+
+        delta, working_space = working_space.transform(delta, ['bfd', 'w'])
+        K, _ = self._kernel_space.broadcast(self.W, b=working_space.get_extent('b'))
+
+        delta = conv.fftconv1d(delta, K, n_threads=self.n_threads, mode='valid')
+        working_space = working_space.with_extent(w=delta.shape[1])
+
+        lengths = lengths - self.kernel_width + 1
+
+        delta, working_space = working_space.transform(delta, working_space.folded_axes)
+        delta = delta.sum(axis=working_space.axes.index('f'))
+        working_space = working_space.without_axes('f')
+
+        meta['space_below'] = working_space
+        meta['lengths'] = lengths
+
+        assert list(working_space.shape) == list(delta.shape)
+
+        return delta, meta
+
+    def grads(self, delta, meta, fprop_state):
+        delta_space = meta['space_above']
+        X = fprop_state['X']
+        X_space = fprop_state['input_space']
+
+        delta, delta_space = delta_space.transform(delta, ['bfd', 'w'])
+        X, X_space = X_space.transform(X, ['bfd', 'w'], f=delta_space.get_extent('f'))
+
+        grad_W = conv.fftconv1d(np.fliplr(delta), X, n_threads=self.n_threads, mode='valid')
+        grad_W_space = delta_space.with_extent(w=grad_W.shape[1])
+
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, grad_W_space.folded_axes)
+
+        grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
+        grad_W_space = grad_W_space.without_axes('b')
+
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, ['fd', 'w'])
+
+        return [grad_W]
+
+    def params(self):
+        return [self.W]
 
     def __repr__(self):
         return "{}(W={})".format(
@@ -103,7 +167,7 @@ class SentenceConvolution(object):
             self.W.shape)
 
 
-class Bias(object):
+class Bias(layer.Layer):
     def __init__(self, n_input_dims, n_feature_maps):
         self.n_input_dims = n_input_dims
         self.n_feature_maps = n_feature_maps
@@ -113,8 +177,8 @@ class Bias(object):
     def fprop(self, X, meta):
         working_space = meta['space_below']
 
-        assert [self.n_input_dims] == working_space.get_extents('d')
-        assert [self.n_feature_maps] == working_space.get_extents('f')
+        assert self.n_input_dims == working_space.get_extent('d')
+        assert self.n_feature_maps == working_space.get_extent('f')
 
         X, working_space = working_space.transform(X, ['b', 'w', 'f', 'd'])
 
@@ -122,18 +186,22 @@ class Bias(object):
 
         meta['space_above'] = working_space
 
-        return X, meta
+        return X, meta, {}
 
-    def bprop(self, Y, delta, meta, fprop_state):
+    def bprop(self, delta, meta, fprop_state):
+        meta['space_below'] = meta['space_above']
         return delta, meta
 
-    def grads(self, X, delta, meta):
+    def grads(self, delta, meta, fprop_state):
         working_space = meta['space_above']
 
         delta, working_space = working_space.transform(delta, ['f', 'd', 'bw'])
         grad_b = delta.sum(axis=2)
 
         return [grad_b]
+
+    def params(self):
+        return [self.b]
 
     def __repr__(self):
         return "{}(n_input_dims={}, n_feature_maps={})".format(

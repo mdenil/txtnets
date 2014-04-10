@@ -3,8 +3,9 @@ __author__ = 'mdenil'
 import numpy as np
 
 from cpu import space
+from cpu.model import layer
 
-class KMaxPooling(object):
+class KMaxPooling(layer.Layer):
     def __init__(self, k):
         self.k = k
 
@@ -18,6 +19,8 @@ class KMaxPooling(object):
         d, f, b, w = working_space.get_extents(['d', 'f', 'b', 'w'])
 
         X, working_space = working_space.transform(X, ['dfb', 'w'])
+
+        fprop_state = {"space_below": working_space}
 
         padding_mask = lengths.reshape((-1,1)) <= np.arange(working_space.get_extent('w'))
         padding_space = space.Space.infer(padding_mask, ['b', 'w'])
@@ -36,19 +39,11 @@ class KMaxPooling(object):
         index_mask = (k_max_indexes == np.iinfo(k_max_indexes.dtype).max)
         k_max_indexes[index_mask] = 0
 
-        # FIXME: this object should be stateless, but right now I need to know these things for backprop
-        # self.space_below = working_space
-        # self.k_max_indexes = k_max_indexes
-        # self.index_mask = index_mask
-
         # save these for backprop
-        fprop_state = {}
         fprop_state['k_max_indexes'] = k_max_indexes
         fprop_state['index_mask'] = index_mask
 
         rows = np.vstack([np.arange(working_space.get_extent('dfb'))] * self.k).T
-
-        # print X.shape
 
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
@@ -63,9 +58,9 @@ class KMaxPooling(object):
 
         return X, meta, fprop_state
 
-    def bprop(self, X, delta, meta, fprop_state):
+    def bprop(self, delta, meta, fprop_state):
 
-        space_below = meta['space_below']
+        space_below = fprop_state['space_below']
         space_above = meta['space_above']
 
         # mask for the values to keep from delta
@@ -80,7 +75,7 @@ class KMaxPooling(object):
 
         back[rows[index_mask], k_max_indexes[index_mask]] = delta[index_mask]
 
-        meta['space_below'] = working_space
+        meta['space_below'] = working_space.with_extent(w=space_below.get_extent('w'))
 
         return back, meta
 
@@ -92,7 +87,7 @@ class KMaxPooling(object):
 
 
 
-class SumFolding(object):
+class SumFolding(layer.Layer):
     def __init__(self):
         pass
 
@@ -109,9 +104,9 @@ class SumFolding(object):
 
         working_space = working_space.with_extent(d=folded_size)
         meta['space_above'] = working_space
-        return X, meta
+        return X, meta, {}
 
-    def bprop(self, X, delta, meta, fprop_state):
+    def bprop(self, delta, meta, fprop_state):
         working_space = meta['space_above']
 
         delta, working_space = working_space.broadcast(delta, d=2)

@@ -20,7 +20,6 @@ class Tanh(unittest.TestCase):
         self.meta = {'space_below': self.X_space, 'lengths': np.zeros(b) + w}
 
         self.csm = model.model.CSM(
-            input_axes=['w', 'f', 'd', 'b'],
             layers=[
                 self.layer,
                 model.transfer.Softmax(
@@ -30,7 +29,7 @@ class Tanh(unittest.TestCase):
         self.cost = model.cost.CrossEntropy()
 
     def test_fprop(self):
-        actual, _ = self.layer.fprop(self.X, meta=self.meta)
+        actual, _, _ = self.layer.fprop(self.X, meta=self.meta)
         expected = np.tanh(self.X)
 
         assert np.allclose(actual, expected)
@@ -38,15 +37,16 @@ class Tanh(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x, meta=self.meta)
-            c,_ = self.cost.fprop(Y, self.Y)
+            Y, meta, fprop_state = self.csm.fprop(x, meta=self.meta, return_state=True)
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_meta=True, return_state=True)
-            delta, _ = self.cost.bprop(Y, self.Y)
-            delta = self.csm.bprop(delta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_state=True)
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+            delta, meta = self.cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
+            delta = self.csm.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
@@ -65,7 +65,6 @@ class Relu(unittest.TestCase):
         self.meta = {'space_below': self.X_space, 'lengths': np.zeros(b) + w}
 
         self.csm = model.model.CSM(
-            input_axes=['w', 'f', 'd', 'b'],
             layers=[
                 self.layer,
                 model.transfer.Softmax(
@@ -75,7 +74,7 @@ class Relu(unittest.TestCase):
         self.cost = model.cost.CrossEntropy()
 
     def test_fprop(self):
-        actual, _ = self.layer.fprop(self.X, meta=self.meta)
+        actual, _, _ = self.layer.fprop(self.X, meta=self.meta)
         expected = np.maximum(0, self.X)
 
         assert np.allclose(actual, expected)
@@ -83,15 +82,16 @@ class Relu(unittest.TestCase):
     def test_bprop(self):
         def func(x):
             x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x, meta=self.meta)
-            c,_ = self.cost.fprop(Y, self.Y)
+            Y, meta, fprop_state = self.csm.fprop(x, meta=self.meta, return_state=True)
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_meta=True, return_state=True)
-            delta, _ = self.cost.bprop(Y, self.Y)
-            delta = self.csm.bprop(delta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_state=True)
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+            delta, meta = self.cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
+            delta = self.csm.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5

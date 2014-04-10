@@ -72,7 +72,9 @@ class Space(object):
             folded = [f for f in folded if f not in axes_to_drop]
             new_axes.append(''.join(folded))
 
-        space._axes = new_axes
+        space._axes = [ax for ax in new_axes if ax != '']
+
+        assert set(space.folded_axes) == set(space._extent.keys())
 
         return space
 
@@ -120,3 +122,9 @@ class Space(object):
 
     def is_compatable_shape(self, X):
         return all(a == b for a,b in zip(X.shape, self.shape)) and len(X.shape) == len(self.shape)
+
+    def __repr__(self):
+        return "{}(axes={}, extent=[{}])".format(
+            self.__class__.__name__,
+            self.axes,
+            ",".join("{}={}".format(k,v) for k,v in self._extent.iteritems()))

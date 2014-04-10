@@ -24,12 +24,12 @@ def load_testing_model(file_name):
     assert CR_E.shape == embedding.E.shape
     embedding.E = CR_E
 
-    conv = model.transfer.SentenceConvolution(
+    sentence_convolution = model.transfer.SentenceConvolution(
         n_feature_maps=5,
         kernel_width=2,
         n_input_dimensions=42)
-    assert conv.W.shape == CR_1.shape
-    conv.W = CR_1
+    assert sentence_convolution.W.shape == CR_1.shape
+    sentence_convolution.W = CR_1
 
     bias = model.transfer.Bias(
         n_input_dims=21,
@@ -43,10 +43,9 @@ def load_testing_model(file_name):
     softmax.b = CR_Z[:,-1].reshape((-1,1))
 
     csm = model.model.CSM(
-        input_axes=['b', 'w'],
         layers=[
             embedding,
-            conv,
+            sentence_convolution,
             model.pooling.SumFolding(),
             model.pooling.KMaxPooling(k=7),
             bias,
@@ -93,7 +92,7 @@ def run():
         # meta = {'lengths': train_sentence_lengths[batch_index*batch_size:(batch_index+1)*batch_size]}
         lengths = train_sentence_lengths[batch_index*batch_size:(batch_index+1)*batch_size]
 
-        out = csm.fprop(minibatch, lengths=lengths)
+        out = csm.fprop(minibatch, meta={'lengths': lengths}, input_axes=['b', 'w'])
 
         if not np.allclose(out, matlab_results[batch_index]):
             n_new_errs_small = np.sum(np.abs(out - matlab_results[batch_index]) > tol)

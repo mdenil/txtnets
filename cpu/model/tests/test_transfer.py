@@ -27,6 +27,8 @@ class Softmax(unittest.TestCase):
 
         self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
+        self.cost = model.cost.CrossEntropy()
+
     def test_fprop(self):
         actual, _, _ = self.layer.fprop(self.X, meta=self.meta)
         expected = np.exp(np.dot(self.layer.W, self.X.reshape((self.n_input_dimensions, -1))) + self.layer.b)
@@ -35,37 +37,35 @@ class Softmax(unittest.TestCase):
         assert np.allclose(actual, expected)
 
     def test_bprop(self):
-        cost = model.cost.CrossEntropy()
-
         def func(x):
             x = x.reshape(self.X.shape)
-            Y, _, _ = self.layer.fprop(x, meta=self.meta)
-            c,_ = cost.fprop(Y, self.Y)
+            Y, meta, fprop_state = self.layer.fprop(x, meta=self.meta)
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
             return c
 
         def grad(x):
             X = x.reshape(self.X.shape)
             Y, meta, fprop_state = self.layer.fprop(X, self.meta)
-            delta, _ = cost.bprop(Y, self.Y)
-            delta, _ = self.layer.bprop(X, delta, meta=meta, fprop_state=fprop_state)
+            cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+            delta, meta = self.cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
+            delta, _ = self.layer.bprop(delta, meta=meta, fprop_state=fprop_state)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
 
     def test_grad_W(self):
-        cost = model.cost.CrossEntropy()
-
         def func(w):
             self.layer.W = w.reshape(self.layer.W.shape)
-            Y, _, _ = self.layer.fprop(self.X, meta=self.meta)
-            c,_ = cost.fprop(Y, self.Y)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
             return c
 
         def grad(w):
             self.layer.W = w.reshape(self.layer.W.shape)
-            Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
-            delta, _ = cost.bprop(Y, self.Y)
-            [grad_W, _] = self.layer.grads(self.X, delta, meta=meta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
+            cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+            delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
+            [grad_W, _] = self.layer.grads(delta, meta=dict(meta), fprop_state=fprop_state)
 
             return grad_W.ravel()
 
@@ -76,15 +76,16 @@ class Softmax(unittest.TestCase):
 
         def func(b):
             self.layer.b = b.reshape(self.layer.b.shape)
-            Y, _, _ = self.layer.fprop(self.X, meta=self.meta)
-            c,_ = cost.fprop(Y, self.Y)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
+            c, meta, cost_state = cost.fprop(Y, self.Y, meta)
             return c
 
         def grad(b):
             self.layer.b = b.reshape(self.layer.b.shape)
             Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
-            delta, _ = cost.bprop(Y, self.Y)
-            [_, grad_b] = self.layer.grads(self.X, delta, meta=meta, fprop_state=fprop_state)
+            c, meta, cost_state = cost.fprop(Y, self.Y, meta=meta)
+            delta, meta = cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
+            [_, grad_b] = self.layer.grads(delta, meta=meta, fprop_state=fprop_state)
 
             return grad_b.ravel()
 
@@ -94,71 +95,116 @@ class Softmax(unittest.TestCase):
 
 class Bias(unittest.TestCase):
     def setUp(self):
-        b,w,f,d = 1, 1, 3, 5
-        self.n_classes = 7
+        b,w,f,d = 2, 1, 3, 2
 
         self.layer = model.transfer.Bias(
             n_feature_maps=f,
             n_input_dims=d)
-        # biases default to zero
+        # biases default to zero, lets mix it up a bit
         self.layer.b = np.random.standard_normal(size=self.layer.b.shape)
 
         self.X = np.random.standard_normal(size=(b,w,f,d))
-        self.Y = np.random.randint(0, self.n_classes, size=b)
-        self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
-
         self.X_space = space.Space.infer(self.X, ['b', 'w', 'f', 'd'])
         self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
-        self.csm = model.model.CSM(
-            input_axes=['b', 'w', 'f', 'd'],
-            layers=[
-                self.layer,
-                model.transfer.Softmax(
-                    n_classes=self.n_classes,
-                    n_input_dimensions=w*f*d),
-                ])
-        self.cost = model.cost.CrossEntropy()
-
 
     def test_fprop(self):
-        actual, _ = self.layer.fprop(self.X.copy(), meta=self.meta)
+        actual, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
         expected = self.X + self.layer.b
 
         assert np.allclose(actual, expected)
 
     def test_bprop(self):
         def func(x):
-            x = x.reshape(self.X.shape)
-            Y = self.csm.fprop(x.copy(), meta=self.meta)
-            c,_ = self.cost.fprop(Y.copy(), self.Y.copy())
-            return c
+            X = x.reshape(self.X.shape)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            return Y.sum()
 
         def grad(x):
             X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.csm.fprop(X.copy(), meta=self.meta, return_meta=True, return_state=True)
-            delta, _ = self.cost.bprop(Y.copy(), self.Y.copy())
-            delta = self.csm.bprop(delta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            delta, meta = self.layer.bprop(np.ones_like(Y), meta=dict(meta), fprop_state=fprop_state)
+            delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
+
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
 
     def test_grad_b(self):
-
         def func(b):
             self.layer.b = b.reshape(self.layer.b.shape)
-            Y, _ = self.layer.fprop(self.X.copy(), meta=self.meta)
-            c = Y.sum()
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
             return Y.sum()
 
         def grad(b):
             self.layer.b = b.reshape(self.layer.b.shape)
 
-            Y, meta = self.layer.fprop(self.X.copy(), meta=self.meta)
-            delta = np.ones_like(Y)
-            [gb] = self.layer.grads(self.X.copy(), delta, meta=meta)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
+            grads = self.layer.grads(np.ones_like(Y), meta=dict(meta), fprop_state=fprop_state)
+
+            gb = grads[0]
 
             return gb.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.layer.b.ravel()) < 1e-5
+
+
+
+class SentenceConvolution(unittest.TestCase):
+    def setUp(self):
+        b,w,f,d = 2, 20, 2, 2
+        kernel_width = 4
+
+        self.layer = model.transfer.SentenceConvolution(
+            n_feature_maps=f,
+            n_input_dimensions=d,
+            kernel_width=kernel_width)
+
+        self.X = np.random.standard_normal(size=(b,w,d))
+
+        self.X_space = space.Space.infer(self.X, ['b', 'w', 'd'])
+        self.meta = {'lengths': np.random.randint(1, w, size=b), 'space_below': self.X_space}
+
+        # Using this causes test_grad_W to fail if you forget to flip delta before the convolution when computing
+        # the gradient (this is good because if you forget that you're doing it wrong).  If you don't have a mask and
+        # just backprop all ones then the test still passes without the flip (i.e. with the wrong gradient).
+        self.delta_mask = np.random.uniform(size=(b*d*f, w+kernel_width-1)) > 0.5
+
+
+    def test_fprop(self):
+        self.skipTest('WRITEME')
+
+    def test_bprop(self):
+        def func(x):
+            X = x.reshape(self.X.shape)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            Y *= self.delta_mask
+            return Y.sum()
+
+        def grad(x):
+            X = x.reshape(self.X.shape)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            delta, meta = self.layer.bprop(self.delta_mask, meta=dict(meta), fprop_state=fprop_state)
+            delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
+            return delta.ravel()
+
+        assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
+
+    def test_grad_W(self):
+        def func(W):
+            self.layer.W = W.reshape(self.layer.W.shape)
+            Y, meta, fprop_state = self.layer.fprop(self.X.copy(), meta=dict(self.meta))
+            Y *= self.delta_mask
+            return Y.sum()
+
+        def grad(W):
+            self.layer.W = W.reshape(self.layer.W.shape)
+
+            Y, meta, fprop_state = self.layer.fprop(self.X.copy(), meta=dict(self.meta))
+            delta = np.ones_like(Y)
+            [grad_W] = self.layer.grads(self.delta_mask, meta=dict(meta), fprop_state=fprop_state)
+
+            return grad_W.ravel()
+
+        assert scipy.optimize.check_grad(func, grad, self.layer.W.ravel()) < 1e-5
 

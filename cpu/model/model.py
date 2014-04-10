@@ -2,36 +2,30 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+import itertools
+
 from . import tools
 from cpu import space
+from cpu.model import layer
 
-class CSM(object):
+class CSM(layer.Layer):
     def __init__(self,
-                 input_axes,
                  layers,
                  ):
-        self.input_axes = input_axes
         self.layers = layers
 
-    def fprop(self, X, meta, num_layers=None, return_state=False, return_meta=False):
+    def fprop(self, X, meta, num_layers=None, return_state=False, input_axes=None):
         if 'space_below' not in meta:
-            meta['space_below'] = space.Space.infer(X, self.input_axes)
+            assert input_axes is not None
+            meta['space_below'] = space.Space.infer(X, input_axes)
 
-        self._Xs = []
-        self._X_metas = []
-        self._Ys = []
-        self._Y_metas = []
-
-        fprop_state = []
+        layer_fprop_states = []
 
         for layer_index, layer in enumerate(self.layers):
             if num_layers and layer_index == num_layers:
                 break
 
-            self._Xs.append(X)
-            self._X_metas.append(dict(meta))
-
-            if 'space_above' in meta:
+            if layer_index > 0:
                 meta['space_below'] = meta['space_above']
                 del meta['space_above']
 
@@ -41,65 +35,73 @@ class CSM(object):
                     X.shape,
                     meta['space_below'].shape))
 
-            ret = layer.fprop(X, meta=dict(meta))
-
-            if len(ret) == 3:
-                X, meta, layer_fprop_state = ret
-            else:
-                X, meta = ret
-                layer_fprop_state = {}
+            X, meta, layer_fprop_state = _ensure_layer_fprop_state(layer.fprop(X, meta=dict(meta)))
 
             if 'space_above' not in meta:
                 meta['space_above'] = meta['space_below']
 
-            self._Ys.append(X)
-            self._Y_metas.append(dict(meta))
+            layer_fprop_states.append(layer_fprop_state)
 
-            fprop_state.append(layer_fprop_state)
+        fprop_state = {
+            'layer_fprop_states': layer_fprop_states,
+        }
 
-        ret = [X]
-
-
-        if return_meta:
-            ret.append(meta)
-
-        if return_state:
-            ret.append(fprop_state)
-
-        if len(ret) == 1:
-            return ret[0]
+        if not return_state:
+            return X
         else:
-            return ret
+            return X, meta, fprop_state
 
-    def bprop(self, delta, fprop_state):
-        assert len(self.layers) == len(self._Y_metas)
 
-        meta_above = None
-        for layer, layer_fprop_state, Y, meta in reversed(zip(self.layers, fprop_state, self._Ys, self._Y_metas)):
-            if meta_above:
-                delta, _ = meta_above['space_below'].transform(delta, meta['space_above'].axes)
-            delta, meta_above = layer.bprop(Y, delta, fprop_state=layer_fprop_state, meta=meta)
+    def bprop(self, delta, meta, fprop_state, return_state=False):
+        layer_fprop_states = fprop_state['layer_fprop_states']
 
-        return delta
+        assert len(self.layers) == len(layer_fprop_states)
 
-    # TOOD: re-write this correctly:
-    # def grads(self, delta):
-    #     assert len(self.layers) == len(self._Y_metas)
-    #     assert len(self.layers) == len(self._X_metas)
-    #
-    #     grads = []
-    #
-    #     meta_above = None
-    #     for layer, X, X_meta, Y, Y_meta in reversed(zip(self.layers, self._Xs, self._X_metas, self._Ys, self._Y_metas)):
-    #         if meta_above:
-    #             delta, _ = meta_above['data_space'].transform(delta, Y_meta['data_space'].axes)
-    #         new_grads, _ = layer.grads(X, delta, meta=X_meta)
-    #         delta, meta_above = layer.bprop(Y, delta, meta=Y_meta)
-    #
-    #         # build list backwards because we're iterating backwards
-    #         grads.extend(reversed(new_grads))
-    #
-    #     return list(reversed(grads))
+        for layer_index, layer, layer_fprop_state in reversed(zip(itertools.count(), self.layers, layer_fprop_states)):
+            # The space below the layer above is the space above the current layer, we dont know what the space below
+            # this layer is yet.
+            if layer_index < len(self.layers) - 1:
+                meta['space_above'] = meta['space_below']
+            del meta['space_below']
+
+            # layers should _not_ assume Y and delta are in the same space.  Y will be in the space they produced
+            # (and they can store this space info in layer_fprop_state if they want),
+            # delta will be described by meta['space_above']
+
+            delta, meta = layer.bprop(delta, fprop_state=layer_fprop_state, meta=dict(meta))
+
+        if not return_state:
+            return delta
+        else:
+            return delta, meta
+
+    def grads(self, delta, meta, fprop_state):
+        layer_fprop_states = fprop_state['layer_fprop_states']
+
+        assert len(self.layers) == len(layer_fprop_states)
+
+        grads = []
+
+        for layer_index, layer, layer_fprop_state in reversed(zip(itertools.count(), self.layers, layer_fprop_states)):
+
+
+            if layer_index < len(self.layers) - 1:
+                meta['space_above'] = meta['space_below']
+            del meta['space_below']
+
+            new_grads = layer.grads(delta, meta=dict(meta), fprop_state=layer_fprop_state)
+            delta, meta = layer.bprop(delta, meta=dict(meta), fprop_state=layer_fprop_state)
+
+            # build list backwards because we're iterating backwards
+            grads.extend(reversed(new_grads))
+
+        return list(reversed(grads))
+
+    def params(self):
+        params = []
+        for layer in self.layers:
+            params.extend(layer.params())
+        return params
 
     def __repr__(self):
         return "\n".join([
@@ -107,3 +109,14 @@ class CSM(object):
             "\n".join(l.__repr__() for l in self.layers),
             "}"
         ])
+
+
+
+def _ensure_layer_fprop_state(ret):
+    if len(ret) == 3:
+        X, meta, layer_fprop_state = ret
+    else:
+        X, meta = ret
+        layer_fprop_state = {}
+
+    return X, meta, layer_fprop_state
