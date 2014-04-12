@@ -14,23 +14,28 @@ class Softmax(layer.Layer):
         self.n_classes = n_classes
         self.n_input_dimensions = n_input_dimensions
 
-        self.W = 0.05 * np.random.standard_normal(size=(self.n_classes, self.n_input_dimensions))
-        self.b = np.zeros(shape=(self.n_classes,1))
+        self.W = 0.0025 * np.random.standard_normal(size=(self.n_input_dimensions, self.n_classes))
+        self.b = np.zeros(shape=(1, self.n_classes))
 
     def fprop(self, X, meta):
-        X, X_space = meta['space_below'].transform(X, ['wfd', 'b'])
 
-        Y = np.exp(np.dot(self.W, X) + self.b)
-        Y /= np.sum(Y, axis=0)
+        X, X_space = meta['space_below'].transform(X, ['b', 'wfd'])
+
+        Y = np.exp(np.dot(X, self.W) + self.b)
+        Y /= np.sum(Y, axis=1, keepdims=True)
 
         Y_space = X_space.without_axes('wf')
         Y_space = Y_space.with_extent(d=self.n_classes)
+        assert Y_space.is_compatable_shape(Y)
 
-        meta['lengths'] = np.zeros(meta['lengths'].shape) + self.n_classes
+        lengths_below = meta['lengths']
+        meta['lengths'] = np.ones_like(meta['lengths'])
         meta['space_above'] = Y_space
 
         fprop_state = {
             'X_space': X_space,
+            'Y_space': Y_space,
+            'lengths_below': lengths_below.copy(),
             'X': X,
             'Y': Y,
         }
@@ -40,23 +45,29 @@ class Softmax(layer.Layer):
     def bprop(self, delta, meta, fprop_state):
         Y = fprop_state['Y']
 
-        out = np.dot(self.W.T, delta * Y * (1-Y))
+        assert fprop_state['Y_space'].is_compatable_shape(Y)
+
+        delta, delta_space = meta['space_above'].transform(delta, ['b', 'd'])
+
+        out = np.dot(delta * Y * (1-Y), self.W.T)
 
         meta['space_below'] = fprop_state['X_space']
+        meta['lengths'] = fprop_state['lengths_below']
         return out, meta
 
     def grads(self, delta, meta, fprop_state):
         X = fprop_state['X']
         Y = fprop_state['Y']
         X_space = fprop_state['X_space']
-        X, X_space = X_space.transform(X, ['wfd', 'b'])
+        X, X_space = X_space.transform(X, ['b', 'wfd'])
 
-        delta, delta_space = meta['space_above'].transform(delta, ['wfd', 'b'])
+        delta, delta_space = meta['space_above'].transform(delta, ['b', 'wfd'])
 
         delta = delta * Y * (1-Y)
 
-        grad_W = np.dot(delta, X.T)
-        grad_b = delta.sum(axis=1).reshape(self.b.shape)
+        grad_W = np.dot(X.T, delta)
+        grad_b = delta.sum(axis=0).reshape(self.b.shape)
+        # grad_b = delta.mean(axis=0).reshape(self.b.shape)
 
         return [grad_W, grad_b]
 
@@ -81,7 +92,7 @@ class SentenceConvolution(layer.Layer):
         self.n_input_dimensions = n_input_dimensions
         self.n_threads = n_threads
 
-        self.W = 0.05 * np.random.standard_normal(
+        self.W = 0.0025 * np.random.standard_normal(
             size=(self.n_feature_maps, self.n_input_dimensions, self.kernel_width))
         self._kernel_space = space.Space.infer(self.W, ['f', 'd', 'w'])
         self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfd', 'w'])
@@ -93,6 +104,7 @@ class SentenceConvolution(layer.Layer):
         fprop_state = {
             'input_space': working_space,
             'X': X,
+            'lengths_below': lengths.copy()
         }
 
         b, d, w = working_space.get_extents(['b','d','w'])
@@ -137,6 +149,8 @@ class SentenceConvolution(layer.Layer):
 
         meta['space_below'] = working_space
         meta['lengths'] = lengths
+
+        assert np.all(lengths == fprop_state['lengths_below'])
 
         assert list(working_space.shape) == list(delta.shape)
 
@@ -190,9 +204,14 @@ class Bias(layer.Layer):
 
         meta['space_above'] = working_space
 
-        return X, meta, {}
+        fprop_state = {
+            'lengths_above': meta['lengths'].copy() # for debugging only
+        }
+
+        return X, meta, fprop_state
 
     def bprop(self, delta, meta, fprop_state):
+        assert np.all(meta['lengths'] == fprop_state['lengths_above'])
         meta['space_below'] = meta['space_above']
         return delta, meta
 

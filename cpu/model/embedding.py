@@ -16,7 +16,7 @@ class WordEmbedding(layer.Layer):
         self.dimension = dimension
         self.vocabulary_size = vocabulary_size
 
-        self.E = 0.05 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
+        self.E = 0.0025 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
     def fprop(self, X, meta):
         X, X_space = meta['space_below'].transform(X, ['bw', 'd'])

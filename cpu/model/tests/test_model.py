@@ -21,7 +21,7 @@ class ModelBProp(unittest.TestCase):
 
         self.X = np.random.standard_normal(size=(sentence_length, embedding_dimension, batch_size))
         self.Y = np.random.randint(n_classes, size=batch_size)
-        self.Y = np.equal.outer(np.arange(n_classes), self.Y).astype(self.Y.dtype)
+        self.Y = np.equal.outer(self.Y, np.arange(n_classes)).astype(self.Y.dtype)
 
         self.meta = {
             'space_below': space.Space.infer(self.X, ['w', 'd', 'b']),
@@ -59,6 +59,7 @@ class ModelBProp(unittest.TestCase):
             X = x.reshape(self.X.shape)
 
             Y, meta, fprop_state = self.model.fprop(X, meta=dict(self.meta), return_state=True)
+            meta['space_below'] = meta['space_above']
             cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
             delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
             delta, meta = self.model.bprop(delta, meta=dict(meta), fprop_state=fprop_state, return_state=True)
@@ -82,7 +83,7 @@ class Model(unittest.TestCase):
 
         self.X = np.random.randint(vocabulary_size, size=(batch_size, sentence_length))
         self.Y = np.random.randint(n_classes, size=batch_size)
-        self.Y = np.equal.outer(np.arange(n_classes), self.Y).astype(self.Y.dtype)
+        self.Y = np.equal.outer(self.Y, np.arange(n_classes)).astype(self.Y.dtype)
 
         self.meta = {
             'space_below': space.Space.infer(self.X, ['b', 'w']),
@@ -123,6 +124,7 @@ class Model(unittest.TestCase):
 
     def test_misc(self):
         Y, meta, fprop_state = self.model.fprop(self.X, self.meta, return_state=True)
+        meta['space_below'] = meta['space_above']
         cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
         delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
         grads = self.model.grads(delta, meta=dict(meta), fprop_state=fprop_state)
@@ -145,6 +147,7 @@ class Model(unittest.TestCase):
             self.model.unpack(w)
 
             Y, meta, fprop_state = self.model.fprop(self.X, meta=dict(self.meta), return_state=True)
+            meta['space_below'] = meta['space_above']
             c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
             delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
             grads = self.model.grads(delta, meta=dict(meta), fprop_state=fprop_state)

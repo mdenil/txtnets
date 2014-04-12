@@ -12,7 +12,7 @@ class CrossEntropy(unittest.TestCase):
         self.n_classes = 5
         self.n_data = 2
 
-        self.cost = model.cost.CrossEntropy()
+        self.cost = model.cost.CrossEntropy(stabilizer=0.0)
 
         self.Y = np.random.uniform(size=(self.n_data, self.n_classes))
         self.Y /= self.Y.sum(axis=1, keepdims=True)
@@ -28,7 +28,7 @@ class CrossEntropy(unittest.TestCase):
 
     def test_fprop(self):
         actual, _, _ = self.cost.fprop(self.Y, self.Y_true, meta=self.meta)
-        expected = -np.sum(self.Y_true * np.log(self.Y))
+        expected = -np.sum(self.Y_true * np.log(self.Y)) / self.n_data
 
         assert np.allclose(actual, expected)
 

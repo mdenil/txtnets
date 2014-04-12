@@ -20,7 +20,10 @@ class KMaxPooling(layer.Layer):
 
         X, working_space = working_space.transform(X, ['dfb', 'w'])
 
-        fprop_state = {"space_below": working_space}
+        fprop_state = {
+            "space_below": working_space,
+            "lengths_below": lengths,
+        }
 
         padding_mask = lengths.reshape((-1,1)) <= np.arange(working_space.get_extent('w'))
         padding_space = space.Space.infer(padding_mask, ['b', 'w'])
@@ -76,6 +79,7 @@ class KMaxPooling(layer.Layer):
         back[rows[index_mask], k_max_indexes[index_mask]] = delta[index_mask]
 
         meta['space_below'] = working_space.with_extent(w=space_below.get_extent('w'))
+        meta['lengths'] = fprop_state['lengths_below']
 
         return back, meta
 

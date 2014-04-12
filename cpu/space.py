@@ -33,6 +33,15 @@ class Space(object):
                 expanded_axes.append(ax)
                 expanded_extent[ax] = 1
             expanded_space = Space(expanded_axes, expanded_extent)
+        elif set(new_space.folded_axes) <= set(self.folded_axes):
+            expanded_space = self
+
+            extra_axes = set(self.folded_axes) - set(new_space.folded_axes)
+            for ax in extra_axes:
+                if expanded_space.get_extent(ax) == 1:
+                    expanded_space = expanded_space.without_axes(ax)
+                else:
+                    raise ValueError("Can't transform {} to {}".format(self, new_space))
         else:
             expanded_space = self
 

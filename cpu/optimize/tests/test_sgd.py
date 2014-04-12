@@ -5,6 +5,7 @@ import numpy as np
 import unittest
 
 from cpu.optimize import sgd
+from cpu.optimize import update_rule
 
 class NarrowQuadraticObjective(object):
     def __init__(self):
@@ -41,11 +42,11 @@ class UpdateRuleSkeleton(object):
 
 class TestBasicUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return sgd.BasicUpdateRule(learning_rate=1e-2)
+        return update_rule.BasicUpdateRule(learning_rate=1e-2)
 
 class TestAdaDeltaUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return sgd.AdaDeltaUpdateRule(
+        return update_rule.AdaDeltaUpdateRule(
             rho=0.9,
             epsilon=1e-2,
             model_template=self.model)
@@ -53,23 +54,21 @@ class TestAdaDeltaUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
 
 class TestAdaGradUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return sgd.AdaGradUpdateRule(
-            rho=0.9,
-            epsilon=1e-2,
-            eta=5e-1,
+        return update_rule.AdaGradUpdateRule(
+            gamma=3.0,
             model_template=self.model)
 
 
 class TestMomentumUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return sgd.Momentum(
+        return update_rule.Momentum(
             momentum=0.9,
             epsilon=1e-2,
             model_template=self.model)
 
 class TestNAGUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return sgd.NAG(
+        return update_rule.NAG(
             momentum=0.9,
             epsilon=1e-2,
             model_template=self.model)
@@ -86,21 +85,21 @@ if __name__ == "__main__":
 
 
     update_rules = [
-        sgd.BasicUpdateRule(learning_rate=1e-2),
-        sgd.AdaDeltaUpdateRule(
+        update_rule.BasicUpdateRule(learning_rate=1e-2),
+        update_rule.AdaDeltaUpdateRule(
             rho=0.2,
             epsilon=1e-2,
             model_template=model),
-        sgd.AdaGradUpdateRule(
+        update_rule.AdaGradUpdateRule(
             rho=0.9,
             eta=0.5,
             epsilon=1e-2,
             model_template=model),
-        sgd.Momentum(
+        update_rule.Momentum(
             momentum=0.9,
             epsilon=1e-2,
             model_template=model),
-        sgd.NAG(
+        update_rule.NAG(
             momentum=0.9,
             epsilon=1e-2,
             model_template=model),

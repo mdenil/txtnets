@@ -21,7 +21,7 @@ class Softmax(unittest.TestCase):
 
         self.X = np.random.standard_normal(size=(w, f, d, b))
         self.Y = np.random.randint(0, self.n_classes, size=b)
-        self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
+        self.Y = np.equal.outer(self.Y, np.arange(self.n_classes)).astype(self.X.dtype)
 
         self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
 
@@ -30,9 +30,12 @@ class Softmax(unittest.TestCase):
         self.cost = model.cost.CrossEntropy()
 
     def test_fprop(self):
-        actual, _, _ = self.layer.fprop(self.X, meta=self.meta)
-        expected = np.exp(np.dot(self.layer.W, self.X.reshape((self.n_input_dimensions, -1))) + self.layer.b)
-        expected /= np.sum(expected, axis=0)
+        actual, _, _ = self.layer.fprop(self.X, meta=dict(self.meta))
+
+        X, X_space = self.X_space.transform(self.X, ['b', 'wfd'])
+
+        expected = np.exp(np.dot(X, self.layer.W) + self.layer.b)
+        expected /= np.sum(expected, axis=1, keepdims=True)
 
         assert np.allclose(actual, expected)
 
@@ -40,15 +43,19 @@ class Softmax(unittest.TestCase):
         def func(x):
             x = x.reshape(self.X.shape)
             Y, meta, fprop_state = self.layer.fprop(x, meta=dict(self.meta))
+            meta['space_below'] = meta['space_above']
             c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
             return c
 
         def grad(x):
-            X = x.reshape(self.X.shape)
-            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            x = x.reshape(self.X.shape)
+            Y, meta, fprop_state = self.layer.fprop(x, meta=dict(self.meta))
+            meta['space_below'] = meta['space_above']
             cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
             delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
-            delta, _ = self.layer.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
+            meta['space_above'] = meta['space_below']
+            delta, meta = self.layer.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
+            delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
             return delta.ravel()
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
@@ -57,14 +64,17 @@ class Softmax(unittest.TestCase):
         def func(w):
             self.layer.W = w.reshape(self.layer.W.shape)
             Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
-            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+            meta['space_below'] = meta['space_above']
+            c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=dict(meta))
             return c
 
         def grad(w):
             self.layer.W = w.reshape(self.layer.W.shape)
             Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
+            meta['space_below'] = meta['space_above']
             cost, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
             delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
+            meta['space_above'] = meta['space_below']
             [grad_W, _] = self.layer.grads(delta, meta=dict(meta), fprop_state=fprop_state)
 
             return grad_W.ravel()
@@ -76,16 +86,19 @@ class Softmax(unittest.TestCase):
 
         def func(b):
             self.layer.b = b.reshape(self.layer.b.shape)
-            Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
-            c, meta, cost_state = cost.fprop(Y, self.Y, meta)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
+            meta['space_below'] = meta['space_above']
+            c, meta, cost_state = cost.fprop(Y, self.Y, meta=dict(meta))
             return c
 
         def grad(b):
             self.layer.b = b.reshape(self.layer.b.shape)
-            Y, meta, fprop_state = self.layer.fprop(self.X, meta=self.meta)
-            c, meta, cost_state = cost.fprop(Y, self.Y, meta=meta)
-            delta, meta = cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
-            [_, grad_b] = self.layer.grads(delta, meta=meta, fprop_state=fprop_state)
+            Y, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
+            meta['space_below'] = meta['space_above']
+            c, meta, cost_state = cost.fprop(Y, self.Y, meta=dict(meta))
+            delta, meta = cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
+            meta['space_above'] = meta['space_below']
+            [_, grad_b] = self.layer.grads(delta, meta=dict(meta), fprop_state=fprop_state)
 
             return grad_b.ravel()
 

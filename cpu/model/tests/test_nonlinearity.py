@@ -14,7 +14,7 @@ class Tanh(unittest.TestCase):
         self.X = np.random.standard_normal(size=(w, f, d, b))
         self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
         self.Y = np.random.randint(0, self.n_classes, size=b)
-        self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
+        self.Y = np.equal.outer(self.Y, np.arange(self.n_classes)).astype(self.X.dtype)
 
         self.layer = model.nonlinearity.Tanh()
         self.meta = {'space_below': self.X_space, 'lengths': np.zeros(b) + w}
@@ -44,7 +44,9 @@ class Tanh(unittest.TestCase):
         def grad(x):
             X = x.reshape(self.X.shape)
             Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_state=True)
+            meta['space_below'] = meta['space_above']
             c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
+
             delta, meta = self.cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
             delta = self.csm.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
             return delta.ravel()
@@ -59,7 +61,7 @@ class Relu(unittest.TestCase):
         self.X = np.random.standard_normal(size=(w, f, d, b))
         self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
         self.Y = np.random.randint(0, self.n_classes, size=b)
-        self.Y = np.equal.outer(np.arange(self.n_classes), self.Y).astype(self.X.dtype)
+        self.Y = np.equal.outer(self.Y, np.arange(self.n_classes)).astype(self.X.dtype)
 
         self.layer = model.nonlinearity.Relu()
         self.meta = {'space_below': self.X_space, 'lengths': np.zeros(b) + w}
@@ -89,6 +91,7 @@ class Relu(unittest.TestCase):
         def grad(x):
             X = x.reshape(self.X.shape)
             Y, meta, fprop_state = self.csm.fprop(X, meta=self.meta, return_state=True)
+            meta['space_below'] = meta['space_above']
             c, meta, cost_state = self.cost.fprop(Y, self.Y, meta=meta)
             delta, meta = self.cost.bprop(Y, self.Y, meta=meta, fprop_state=cost_state)
             delta = self.csm.bprop(delta, meta=dict(meta), fprop_state=fprop_state)
