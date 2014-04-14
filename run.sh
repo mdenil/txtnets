@@ -3,7 +3,8 @@
 ROOT="$(pwd)"
 TOOL_PATH="$ROOT"
 ENV="$ROOT/env"
-LIB="$ROOT/lib"
+export LIB="$ROOT/lib"
+export DATA="$ROOT/data"
 
 function echoerr {
     echo "$@" 1>&2

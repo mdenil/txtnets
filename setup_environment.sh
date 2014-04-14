@@ -6,6 +6,7 @@ ROOT="$(pwd)"
 ENV="$ROOT/env"
 EXTERNAL="$ROOT/external"
 LIB="$ROOT/lib"
+DATA="$ROOT/data"
 PLATFORM="$(uname)"
 
 function safe_call {
@@ -49,6 +50,7 @@ function install_scikits-cuda {
 
 mkdir -p "$EXTERNAL"
 mkdir -p "$LIB"
+mkdir -p "$DATA"
 
 export LD_LIBRARY_PATH="$LIB"
 
@@ -61,6 +63,10 @@ safe_call conda_install numpy scipy mkl
 safe_call conda_install matplotlib
 safe_call conda_install psutil
 safe_call conda_install nose
+safe_call conda_install ipython
 safe_call pip_install pyprind
 safe_call pip_install pyfftw
 safe_call pip_install --pre line_profiler
+safe_call pip_install ruffus
+safe_call pip_install sh
+safe_call pip_install simplejson
