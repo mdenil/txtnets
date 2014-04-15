@@ -14,7 +14,7 @@ data_dir = os.environ['DATA']
 text8_dir = os.path.join(data_dir, "text8")
 
 
-N_TRAIN = 1000000
+N_TRAIN = 100000
 CONTEXT_LENGTH = 50
 
 @ruffus.follows(ruffus.mkdir(text8_dir))
