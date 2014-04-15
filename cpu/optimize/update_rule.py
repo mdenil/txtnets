@@ -77,7 +77,7 @@ class AdaGradUpdateRule(UpdateRule):
         return dxs
 
 class AdaDeltaUpdateRule(UpdateRule):
-    def __init__(self, model_template, rho, epsilon):
+    def __init__(self, rho, epsilon, model_template):
         self.rho = rho
         self.epsilon = epsilon
 
