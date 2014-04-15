@@ -121,3 +121,53 @@ class SumFolding(layer.Layer):
     def __repr__(self):
         return "{}()".format(
             self.__class__.__name__)
+
+
+
+
+class MaxFolding(layer.Layer):
+    def __init__(self):
+        pass
+
+    def fprop(self, X, meta):
+        working_space = meta['space_below']
+
+        d, = working_space.get_extents('d')
+        assert ( d % 2 == 0 )
+        folded_size = d / 2
+
+        X, working_space = working_space.transform(X, ['d', 'b', 'f', 'w'])
+
+        switches = X[:folded_size] > X[folded_size:]
+        switches = np.concatenate([switches, np.logical_not(switches)], axis=working_space.axes.index('d'))
+
+        fprop_state = {
+            'switches': switches,
+            'switches_space': working_space,
+        }
+
+        Y = np.maximum(X[:folded_size], X[folded_size:])
+        working_space = working_space.with_extent(d=folded_size)
+
+        meta['space_above'] = working_space
+        return Y, meta, fprop_state
+
+    def bprop(self, delta, meta, fprop_state):
+        working_space = meta['space_above']
+        switches = fprop_state['switches']
+        switches_space = fprop_state['switches_space']
+
+
+
+        delta, working_space = working_space.broadcast(delta, d=2)
+
+        switches, switches_space = switches_space.transform(switches, working_space.axes)
+
+        delta *= switches
+
+        meta['space_below'] = working_space
+        return delta, meta
+
+    def __repr__(self):
+        return "{}()".format(
+            self.__class__.__name__)

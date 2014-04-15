@@ -72,6 +72,21 @@ class Space(object):
 
         return X, new_space
 
+    def add_axes(self, X, *axes):
+        if not self.is_compatable_shape(X):
+            raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, self))
+
+        new_axes = list(self._axes)
+        new_extent = OrderedDict(self._extent)
+        for ax in axes:
+            assert ax not in new_axes
+            new_axes.append(ax)
+            new_extent[ax] = 1
+            X = X[...,np.newaxis]
+
+        new_space = Space(new_axes, new_extent)
+        return X, new_space
+
     def without_axes(self, axes_to_drop):
         space = self.clone()
 
@@ -93,6 +108,30 @@ class Space(object):
 
         return space
 
+    def rename_axes(self, **renames):
+        new_extent = OrderedDict(self._extent)
+        new_axes = list(self._axes)
+
+        for old_name, new_name in renames.iteritems():
+            assert old_name in new_extent.keys()
+
+            newer_axes = []
+            for ax in new_axes:
+                new_axis = ''.join([d if d != old_name else new_name for d in list(ax)])
+                newer_axes.append(new_axis)
+            new_axes = newer_axes
+
+
+            newer_extent = OrderedDict()
+            for ax,ex in new_extent.iteritems():
+                if ax != old_name:
+                    newer_extent[ax] = ex
+                else:
+                    newer_extent[new_name] = ex
+
+            new_extent = newer_extent
+
+        return Space(new_axes, new_extent)
 
     def _fold(self, X):
         return np.reshape(X, self.folded_shape)

@@ -33,6 +33,7 @@ class ModelBProp(unittest.TestCase):
                 model.transfer.SentenceConvolution(
                     n_feature_maps=n_feature_maps,
                     kernel_width=kernel_width,
+                    n_channels=1,
                     n_input_dimensions=embedding_dimension),
                 model.pooling.SumFolding(),
                 model.pooling.KMaxPooling(k=pooling_size),
@@ -99,6 +100,7 @@ class Model(unittest.TestCase):
                 model.transfer.SentenceConvolution(
                     n_feature_maps=n_feature_maps,
                     kernel_width=kernel_width,
+                    n_channels=1,
                     n_input_dimensions=embedding_dimension),
 
                 model.transfer.Bias(

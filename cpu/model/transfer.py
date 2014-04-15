@@ -84,22 +84,31 @@ class SentenceConvolution(layer.Layer):
                  n_feature_maps,
                  kernel_width,
                  n_input_dimensions,
+                 n_channels,
                  n_threads=psutil.NUM_CPUS,
                  ):
 
         self.n_feature_maps = n_feature_maps
         self.kernel_width = kernel_width
         self.n_input_dimensions = n_input_dimensions
+        self.n_channels = n_channels
         self.n_threads = n_threads
 
         self.W = 0.0025 * np.random.standard_normal(
-            size=(self.n_feature_maps, self.n_input_dimensions, self.kernel_width))
-        self._kernel_space = space.Space.infer(self.W, ['f', 'd', 'w'])
-        self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfd', 'w'])
+            size=(self.n_feature_maps, self.n_input_dimensions, self.n_channels, self.kernel_width))
+        self._kernel_space = space.Space.infer(self.W, ['f', 'd', 'c', 'w'])
+        self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfdc', 'w'])
 
     def fprop(self, X, meta):
         working_space = meta['space_below']
         lengths = meta['lengths']
+
+
+        # features in the input space become channels here
+        if 'f' in working_space.folded_axes:
+            working_space = working_space.rename_axes(f='c')
+        else:
+            X, working_space = working_space.add_axes(X, 'c')
 
         fprop_state = {
             'input_space': working_space,
@@ -107,12 +116,13 @@ class SentenceConvolution(layer.Layer):
             'lengths_below': lengths.copy()
         }
 
-        b, d, w = working_space.get_extents(['b','d','w'])
+        b, d, c, w = working_space.get_extents(['b','d','c','w'])
 
+        assert self.n_channels == c
         assert self.n_input_dimensions == d
         f = self.n_feature_maps
 
-        X, working_space = working_space.transform(X, ['bfd', 'w'])
+        X, working_space = working_space.transform(X, ['bfdc', 'w'])
         X, working_space = working_space.broadcast(X, f=f)
 
         K, _ = self._kernel_space.broadcast(np.fliplr(self.W), b=b)
@@ -126,6 +136,10 @@ class SentenceConvolution(layer.Layer):
 
         working_space = working_space.with_extent(w=representation_length)
 
+        X, working_space = working_space.transform(X, ['bdf', 'w', 'c'])
+        X = X.sum(axis=working_space.axes.index('c'))
+        working_space = working_space.without_axes('c')
+
         meta['space_above'] = working_space
         meta['lengths'] = lengths
 
@@ -134,8 +148,9 @@ class SentenceConvolution(layer.Layer):
     def bprop(self, delta, meta, fprop_state):
         working_space = meta['space_above']
         lengths = meta['lengths']
+        X_space = fprop_state['input_space']
 
-        delta, working_space = working_space.transform(delta, ['bfd', 'w'])
+        delta, working_space = working_space.transform(delta, ['bfdc', 'w'], c=X_space.get_extent('c'))
         K, _ = self._kernel_space.broadcast(self.W, b=working_space.get_extent('b'))
 
         delta = conv.fftconv1d(delta, K, n_threads=self.n_threads, mode='valid')
@@ -146,6 +161,7 @@ class SentenceConvolution(layer.Layer):
         delta, working_space = working_space.transform(delta, working_space.folded_axes)
         delta = delta.sum(axis=working_space.axes.index('f'))
         working_space = working_space.without_axes('f')
+        working_space = working_space.rename_axes(c='f')
 
         meta['space_below'] = working_space
         meta['lengths'] = lengths
@@ -161,8 +177,8 @@ class SentenceConvolution(layer.Layer):
         X = fprop_state['X']
         X_space = fprop_state['input_space']
 
-        delta, delta_space = delta_space.transform(delta, ['bfd', 'w'])
-        X, X_space = X_space.transform(X, ['bfd', 'w'], f=delta_space.get_extent('f'))
+        delta, delta_space = delta_space.transform(delta, ['bfdc', 'w'], c=X_space.get_extent('c'))
+        X, X_space = X_space.transform(X, ['bfdc', 'w'], f=delta_space.get_extent('f'))
 
         grad_W = conv.fftconv1d(np.fliplr(delta), X, n_threads=self.n_threads, mode='valid')
         grad_W_space = delta_space.with_extent(w=grad_W.shape[1])
@@ -172,7 +188,7 @@ class SentenceConvolution(layer.Layer):
         grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
         grad_W_space = grad_W_space.without_axes('b')
 
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, ['fd', 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, ['bfdc', 'w'])
 
         return [grad_W]
 

@@ -165,17 +165,19 @@ class Bias(unittest.TestCase):
 
 class SentenceConvolution(unittest.TestCase):
     def setUp(self):
-        b,w,f,d = 2, 20, 2, 2
+        b,w,f,d,c = 2, 20, 2, 2, 2
         kernel_width = 4
 
         self.layer = model.transfer.SentenceConvolution(
             n_feature_maps=f,
             n_input_dimensions=d,
+            n_channels=c,
             kernel_width=kernel_width)
 
-        self.X = np.random.standard_normal(size=(b,w,d))
+        self.X = np.random.standard_normal(size=(b,w,d,c))
 
-        self.X_space = space.Space.infer(self.X, ['b', 'w', 'd'])
+        # features in the X_space are channels in the convolution layer
+        self.X_space = space.Space.infer(self.X, ['b', 'w', 'd', 'f'])
         self.meta = {'lengths': np.random.randint(1, w, size=b), 'space_below': self.X_space}
 
         # Using this causes test_grad_W to fail if you forget to flip delta before the convolution when computing
