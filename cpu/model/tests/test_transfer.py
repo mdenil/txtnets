@@ -223,3 +223,62 @@ class SentenceConvolution(unittest.TestCase):
 
         assert scipy.optimize.check_grad(func, grad, self.layer.W.ravel()) < 1e-5
 
+
+
+class Linear(unittest.TestCase):
+    def setUp(self):
+        b,w,f,d = 2, 20, 2, 2
+        kernel_width = 4
+
+        self.layer = model.transfer.Linear(
+            n_input=f*d*w,
+            n_output=20)
+
+        self.X = np.random.standard_normal(size=(b,w,d,f))
+
+        self.X_space = space.Space.infer(self.X, ['b', 'w', 'd', 'f'])
+        self.meta = {'lengths': np.random.randint(1, w, size=b), 'space_below': self.X_space}
+
+        # Using this causes test_grad_W to fail if you forget to flip delta before the convolution when computing
+        # the gradient (this is good because if you forget that you're doing it wrong).  If you don't have a mask and
+        # just backprop all ones then the test still passes without the flip (i.e. with the wrong gradient).
+        self.delta_mask = np.random.uniform(size=(b, 20)) > 0.5
+
+
+    def test_fprop(self):
+        self.skipTest('WRITEME')
+
+    def test_bprop(self):
+        def func(x):
+            X = x.reshape(self.X.shape)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            Y *= self.delta_mask
+            return Y.sum()
+
+        def grad(x):
+            X = x.reshape(self.X.shape)
+            Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
+            delta, meta = self.layer.bprop(self.delta_mask, meta=dict(meta), fprop_state=fprop_state)
+            delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
+            return delta.ravel()
+
+        assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
+
+    def test_grad_W(self):
+        def func(W):
+            self.layer.W = W.reshape(self.layer.W.shape)
+            Y, meta, fprop_state = self.layer.fprop(self.X.copy(), meta=dict(self.meta))
+            Y *= self.delta_mask
+            return Y.sum()
+
+        def grad(W):
+            self.layer.W = W.reshape(self.layer.W.shape)
+
+            Y, meta, fprop_state = self.layer.fprop(self.X.copy(), meta=dict(self.meta))
+            delta = np.ones_like(Y)
+            [grad_W] = self.layer.grads(self.delta_mask, meta=dict(meta), fprop_state=fprop_state)
+
+            return grad_W.ravel()
+
+        assert scipy.optimize.check_grad(func, grad, self.layer.W.ravel()) < 1e-5
+

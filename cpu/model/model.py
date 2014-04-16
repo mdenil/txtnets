@@ -19,8 +19,12 @@ class CSM(layer.Layer):
             assert input_axes is not None
             meta['space_below'] = space.Space.infer(X, input_axes)
 
-        if not meta['space_below'].is_compatable_shape(X):
+        # HACK: spaces only understand matrices right now
+        if isinstance(X, np.ndarray) and not meta['space_below'].is_compatable_shape(X):
             raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, meta['space_below']))
+
+        if num_layers and num_layers < 0:
+            num_layers = len(self.layers) + num_layers
 
         layer_fprop_states = []
 
@@ -32,18 +36,22 @@ class CSM(layer.Layer):
                 meta['space_below'] = meta['space_above']
                 del meta['space_above']
 
-            if not meta['space_below'].is_compatable_shape(X):
+            # HACK: spaces only understand matrices right now
+            if isinstance(X, np.ndarray) and not meta['space_below'].is_compatable_shape(X):
                 raise ValueError("Layer of type '{}' produced data with shape {}, but claims it has shape {}.".format(
                     type(self.layers[layer_index-1]),
                     X.shape,
                     meta['space_below'].shape))
+
+            # print type(layer)
 
             X, meta, layer_fprop_state = _ensure_layer_fprop_state(layer.fprop(X, meta=dict(meta)))
 
             if 'space_above' not in meta:
                 meta['space_above'] = meta['space_below']
 
-            if not meta['space_above'].is_compatable_shape(X):
+            # HACK: spaces only understand matrices right now
+            if isinstance(X, np.ndarray) and not meta['space_above'].is_compatable_shape(X):
                 raise ValueError("Matrix of shape {} not compatable with {}".format(X.shape, meta['space_above']))
 
             layer_fprop_states.append(layer_fprop_state)
@@ -93,10 +101,16 @@ class CSM(layer.Layer):
 
             if layer_index < len(self.layers) - 1:
                 meta['space_above'] = meta['space_below']
-            del meta['space_below']
+            if 'space_below' in meta:
+                del meta['space_below']
 
             new_grads = layer.grads(delta, meta=dict(meta), fprop_state=layer_fprop_state)
-            delta, meta = layer.bprop(delta, meta=dict(meta), fprop_state=layer_fprop_state)
+
+            if layer_index > 0:
+                delta, meta = layer.bprop(delta, meta=dict(meta), fprop_state=layer_fprop_state)
+
+                if not meta['space_below'].is_compatable_shape(delta):
+                    raise ValueError("Layer of type {} created delta.shape={}, which is incompatable with space_below={}".format(type(layer), delta.shape, meta['space_below']))
 
             # build list backwards because we're iterating backwards
             grads.extend(reversed(new_grads))

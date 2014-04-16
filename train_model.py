@@ -31,7 +31,7 @@ from cpu.optimize.grad_check import fast_gradient_check
 
 from cpu.optimize.sgd import SGD
 
-np.random.seed(32423)
+# np.random.seed(32423)
 
 if __name__ == "__main__":
     data_file_name = "verify_forward_pass/data/SENT_vec_1_emb_ind_bin.mat"
@@ -80,9 +80,28 @@ if __name__ == "__main__":
             SentenceConvolution(
                 n_feature_maps=n_feature_maps,
                 kernel_width=kernel_width,
+                n_channels=1,
                 n_input_dimensions=embedding_dimension),
 
             SumFolding(),
+
+            KMaxPooling(k=pooling_size*2),
+
+            Bias(
+                n_input_dims=embedding_dimension / 2,
+                n_feature_maps=n_feature_maps),
+
+            Tanh(),
+
+            # Softmax(
+            #     n_classes=n_classes,
+            #     n_input_dimensions=420),
+
+            SentenceConvolution(
+                n_feature_maps=n_feature_maps,
+                kernel_width=3,
+                n_channels=n_feature_maps,
+                n_input_dimensions=embedding_dimension/2),
 
             KMaxPooling(k=pooling_size),
 
@@ -94,14 +113,16 @@ if __name__ == "__main__":
 
             Softmax(
                 n_classes=n_classes,
-                n_input_dimensions=n_feature_maps*pooling_size*embedding_dimension / 2),
+                n_input_dimensions=420),
             ],
         )
 
+    print model
+
     # pre-initialize the vocabulary
 
-    model.layers[0].E[:-1,:] = data['vocab_emb'][:embedding_dimension, :].T
-    model.layers[0].E[-1,:] = 0.0
+    # model.layers[0].E[:-1,:] = data['vocab_emb'][:embedding_dimension, :].T
+    # model.layers[0].E[-1,:] = 0.0
 
     # build the optimizer
 

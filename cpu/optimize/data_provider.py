@@ -1,6 +1,7 @@
 __author__ = 'mdenil'
 
 import numpy as np
+import random
 
 from cpu import space
 
@@ -61,3 +62,46 @@ class BatchDataProvider(object):
         }
 
         return self.X, self.Y, meta
+
+
+class PaddedSequenceMinibatchProvider(object):
+    def __init__(self, X, batch_size, padding, shuffle=True):
+        self.X = X
+        self.batch_size = batch_size
+        self.padding = padding
+        self.shuffle = shuffle
+
+        self._batch_index = -1 # will be incremeted to 0 when next_batch is called
+        self.batches_per_epoch = len(X) / self.batch_size
+
+    def next_batch(self):
+        self._prepare_for_next_batch()
+
+        batch_start = self._batch_index * self.batch_size
+        batch_end = batch_start + self.batch_size
+
+        X_batch = self.X[batch_start:batch_end]
+
+        lengths_batch = np.asarray(map(len, X_batch))
+        max_length_batch = lengths_batch.max()
+
+        X_batch = np.vstack([np.atleast_2d(self._add_padding(x, max_length_batch)) for x in X_batch])
+
+        meta = {
+            'lengths': lengths_batch,
+            'space_below': space.Space.infer(X_batch, axes=['b', 'w'])
+        }
+
+        return X_batch, meta
+
+    def _add_padding(self, x, length):
+        return x + [self.padding] * (length - len(x))
+
+    def _prepare_for_next_batch(self):
+        self._batch_index = (self._batch_index + 1) % self.batches_per_epoch
+
+        if self._batch_index == 0 and self.shuffle:
+            self._shuffle_data()
+
+    def _shuffle_data(self):
+        random.shuffle(self.X)

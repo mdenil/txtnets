@@ -7,6 +7,64 @@ from cpu import space
 from cpu import conv
 from cpu.model import layer
 
+class Linear(layer.Layer):
+    def __init__(self, n_input, n_output):
+        self.n_input = n_input
+        self.n_output = n_output
+
+        self.W = 0.0025 * np.random.standard_normal(size=(self.n_input, self.n_output))
+
+
+    def fprop(self, X, meta):
+
+        X, X_space = meta['space_below'].transform(X, ['b', 'wfd'])
+
+        Y = np.dot(X, self.W)
+        Y_space = space.Space.infer(Y, ['b', 'd'])
+        assert Y_space.is_compatable_shape(Y)
+
+        lengths_below = meta['lengths']
+        meta['lengths'] = np.ones_like(meta['lengths'])
+        meta['space_above'] = Y_space
+
+        fprop_state = {
+            'X': X,
+            'X_space': X_space,
+            'lengths_below': lengths_below.copy(),
+            }
+
+        return Y, meta, fprop_state
+
+    def bprop(self, delta, meta, fprop_state):
+        delta, delta_space = meta['space_above'].transform(delta, ['b', 'd'])
+
+        out = np.dot(delta, self.W.T)
+
+        meta['space_below'] = fprop_state['X_space']
+        meta['lengths'] = fprop_state['lengths_below']
+        return out, meta
+
+    def grads(self, delta, meta, fprop_state):
+        X = fprop_state['X']
+        X_space = fprop_state['X_space']
+        X, X_space = X_space.transform(X, ['b', 'wfd'])
+
+        delta, delta_space = meta['space_above'].transform(delta, ['b', 'wfd'])
+
+        grad_W = np.dot(X.T, delta)
+
+        return [grad_W]
+
+    def params(self):
+        return [self.W]
+
+    def __repr__(self):
+        return "{}(W={})".format(
+            self.__class__.__name__,
+            self.W.shape)
+
+
+
 class Softmax(layer.Layer):
     def __init__(self,
                  n_classes,
@@ -20,6 +78,9 @@ class Softmax(layer.Layer):
     def fprop(self, X, meta):
 
         X, X_space = meta['space_below'].transform(X, ['b', 'wfd'])
+
+        if not X.shape[1] == self.W.shape[0]:
+            raise ValueError("Cannot multiply X.shape={} ({}) with W.shape={}".format(X.shape, X_space, self.W.shape))
 
         Y = np.exp(np.dot(X, self.W) + self.b)
         Y /= np.sum(Y, axis=1, keepdims=True)
@@ -100,9 +161,16 @@ class SentenceConvolution(layer.Layer):
         self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfdc', 'w'])
 
     def fprop(self, X, meta):
+
+        # Things go wrong if the w extent of X is smaller than the kernel width... for now just don't do that.
+        if meta['space_below'].get_extent('w') < self.kernel_width:
+            raise ValueError("SentenceConvolution does not support input with w={} extent smaller than kernel_width={}".format(
+                meta['space_below'].get_extent('w'),
+                self.kernel_width
+            ))
+
         working_space = meta['space_below']
         lengths = meta['lengths']
-
 
         # features in the input space become channels here
         if 'f' in working_space.folded_axes:
@@ -118,8 +186,10 @@ class SentenceConvolution(layer.Layer):
 
         b, d, c, w = working_space.get_extents(['b','d','c','w'])
 
-        assert self.n_channels == c
-        assert self.n_input_dimensions == d
+        if not self.n_channels == c:
+            raise ValueError("n_chanels={} but the data has {} channels.".format(self.n_channels, c))
+        if not self.n_input_dimensions == d:
+            raise ValueError("n_input_dimensions={} but the data has {} dimensions.".format(self.n_input_dimensions, d))
         f = self.n_feature_maps
 
         X, working_space = working_space.transform(X, ['bfdc', 'w'])
@@ -211,8 +281,10 @@ class Bias(layer.Layer):
     def fprop(self, X, meta):
         working_space = meta['space_below']
 
-        assert self.n_input_dims == working_space.get_extent('d')
-        assert self.n_feature_maps == working_space.get_extent('f')
+        if not self.n_input_dims == working_space.get_extent('d'):
+            raise ValueError("n_input_dims={} but input has {} dimensions.".format(self.n_input_dims, working_space.get_extent('d')))
+        if not self.n_feature_maps == working_space.get_extent('f'):
+            raise ValueError("n_feature_maps={} but input has {} features.".format(self.n_feature_maps, working_space.get_extent('f')))
 
         X, working_space = working_space.transform(X, ['b', 'w', 'f', 'd'])
 

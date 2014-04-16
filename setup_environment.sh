@@ -89,6 +89,7 @@ safe_call conda_install matplotlib
 safe_call conda_install psutil
 safe_call conda_install nose
 safe_call conda_install ipython
+safe_call conda_install nltk
 safe_call pip_install pyprind
 safe_call pip_install pyfftw
 safe_call pip_install --pre line_profiler

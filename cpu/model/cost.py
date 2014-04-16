@@ -40,3 +40,37 @@ class CrossEntropy(object):
     def __repr__(self):
         return "{}()".format(
             self.__class__.__name__)
+
+
+class LargeMarginCost(object):
+    def __init__(self, margin):
+        self.margin = margin
+
+    def fprop(self, Y_clean, Y_dirty, meta):
+
+        unhinged_loss = self.margin - Y_clean + Y_dirty
+        switches = unhinged_loss > 0.0
+        hinged_loss = np.maximum(0.0, unhinged_loss)
+
+        fprop_state = {
+            'space_below': meta['space_below'],
+            'switches': switches,
+        }
+
+        return hinged_loss.mean(), meta, fprop_state
+
+    def bprop(self, Y_clean, Y_dirty, meta, fprop_state):
+        meta['space_below'] = fprop_state['space_below']
+
+        delta_clean = - Y_clean * fprop_state['switches']
+        delta_dirty = Y_dirty * fprop_state['switches']
+
+        delta_clean /= Y_clean.shape[0]
+        delta_dirty /= Y_dirty.shape[0]
+
+        return delta_clean, delta_dirty, meta
+
+        def __repr__(self):
+            return "{}(margin={})".format(
+                self.__class__.__name__,
+                self.margin)
