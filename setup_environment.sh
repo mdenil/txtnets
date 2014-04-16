@@ -26,6 +26,31 @@ function pip_install {
     pip install "$@"
 }
 
+function install_cld2 {
+    cd "$EXTERNAL"
+
+    # build cld2
+    svn checkout http://cld2.googlecode.com/svn/trunk/ cld2
+
+    cd cld2/internal/
+    if [[ "$PLATFORM" == "Darwin" ]]; then
+        sed -i -e 's/^g++/g++-4.8/' compile_libs.sh
+    fi
+    ./compile_libs.sh
+    mv libcld2_full.so libcld2.so "$LIB"
+
+    # build python bindings for cld2
+    cd "$EXTERNAL"
+
+    hg clone https://code.google.com/p/chromium-compact-language-detector/
+    cd chromium-compact-language-detector
+
+    sed -i -e "/include_dirs/ s~$~library_dirs=\['$LIB'\],~" setup.py setup_full.py
+
+    python setup.py install
+    python setup_full.py install
+}
+
 function install_pycuda {
     cd "$EXTERNAL"
 
@@ -70,3 +95,4 @@ safe_call pip_install --pre line_profiler
 safe_call pip_install ruffus
 safe_call pip_install sh
 safe_call pip_install simplejson
+safe_call install_cld2
