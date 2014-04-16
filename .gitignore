@@ -1,4 +1,7 @@
 env/
+data/
+lib/
+external/
 .pkgs/
 .idea/
 cnn-sm-gpu-kmax
@@ -6,3 +9,6 @@ cnn-sm-gpu-kmax
 *.bak
 *.pyc
 *.swp
+.*.sqlite
+*.pkl
+
