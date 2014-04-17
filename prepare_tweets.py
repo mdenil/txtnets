@@ -1,10 +1,12 @@
 __author__ = 'mdenil'
 
 import os
+import re
 import cld2
 import gzip
 import ruffus
 import simplejson as json
+from collections import Counter
 from nltk.tokenize import WordPunctTokenizer
 
 data_dir = os.environ['DATA']
@@ -73,14 +75,14 @@ def extract_english_tweets(input_file, output_file):
                 label = ":("
                 n_sad += 1
 
+            text = " ".join(words)
 
-            labelled_tweets.append([words, label])
+            labelled_tweets.append([text, label])
 
-        print "Created a dataset with english {} tweets.  {} are happy and {} are sad".format(n_happy + n_sad, n_happy, n_sad)
+        print "Created a dataset with english {} tweets. {} are happy and {} are sad".format(n_happy + n_sad, n_happy, n_sad)
 
     with gzip.open(output_file, 'w') as output:
-        for tweet in labelled_tweets:
-            output.write(u"{}\n".format(json.dumps(tweet)))
+        output.write(u"{}\n".format(json.dumps(labelled_tweets)))
 
 
 @ruffus.transform(extract_english_tweets, ruffus.suffix(".json.gz"), ".balanced.json.gz")
@@ -88,12 +90,12 @@ def extract_balanced_dataset(input_file_name, output_file_name):
     happy = []
     sad = []
     with gzip.open(input_file_name) as input_file:
-        for line in input_file:
-            words, label = json.loads(line)
+        for line in json.loads(input_file.read()):
+            text, label = line
             if label == ":)":
-                happy.append(words)
+                happy.append(text)
             elif label == ":(":
-                sad.append(words)
+                sad.append(text)
             else:
                 raise ValueError("You're not allowed to have fancy labels >:|")
 
@@ -108,39 +110,90 @@ def extract_balanced_dataset(input_file_name, output_file_name):
     happy = zip(happy, happy_labels)
     sad = zip(sad, sad_labels)
 
-    with gzip.open(output_file_name, 'w') as output:
-        for tweet in happy:
-            output.write(u"{}\n".format(json.dumps(tweet)))
 
-        for tweet in sad:
-            output.write(u"{}\n".format(json.dumps(tweet)))
+    with gzip.open(output_file_name, 'w') as output_file:
+        output_file.write(u"{}\n".format(json.dumps(happy + sad)))
 
-@ruffus.transform(extract_english_tweets, ruffus.suffix(".json.gz"), ".alphabet.json")
+@ruffus.transform(extract_balanced_dataset, ruffus.suffix(".json.gz"), ".clean.json.gz")
+def clean_words(input_file_name, output_file_name):
+    def clean_word(word):
+        word = word.lower() #lowercase is not ideal, TODO:
+        word = word.replace('&amp;','&').replace('&lt;','<').replace('&gt;','>').replace('&quot;','"').replace('&#39;',"'")
+        word = re.sub(r'(\S)\1+', r'\1\1', word) #normalize repeated characters to two
+        word = re.sub(r'(\S\S)\1+', r'\1\1', word)
+        #if word.startswith('@'): # this misses "@dudebro: (quote included)
+        if re.match(r'[^A-Za-z0-9]*@', word):
+            #word = 'GENERICUSER' #all other words are lowercase
+            word = 'U'
+        elif word.startswith('#'):
+            #word = 'GENERICHASHTAG'
+            word = 'H'
+        elif re.search('((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-]*)?\??(?:[-\+=&;%@.\w]*)#?(?:[\w]*))?)',word) is not None:
+            #word = 'GENERICHTTP'
+            word = 'L'
+        return word
+
+    data = []
+    with gzip.open(input_file_name) as input_file:
+        for line in json.loads(input_file.read()):
+            text, label = line
+            text = " ".join(map(clean_word, text.split()))
+            data.append([text, label])
+
+    with gzip.open(output_file_name, 'w') as output_file:
+        output_file.write("{}\n".format(json.dumps(data)))
+
+
+
+@ruffus.transform(
+    [extract_balanced_dataset, clean_words],
+    ruffus.suffix(".json.gz"), ".alphabet.json")
 def build_alphabet(input_file_name, output_file_name):
     alphabet = set()
     with gzip.open(input_file_name) as input_file:
-        for line in input_file:
-            words, label = json.loads(line)
+        for line in json.loads(input_file.read()):
+            text, label = line
 
-            for word in words:
-                alphabet = alphabet.union(word)
+            alphabet = alphabet.union(text)
 
-    alphabet = list(sorted(alphabet)) + ['START', 'END', 'PADDING']
+    # U,H,L = USER, HASHTAG, LINK
+    alphabet = list(sorted(alphabet)) + ['START', 'END', 'UNKNOWN', 'PADDING']
 
     with open(output_file_name, 'w') as output_file:
         output_file.write("{}\n".format(json.dumps(alphabet)))
 
-@ruffus.transform(build_alphabet, ruffus.suffix(".alphabet.json"), ".alphabet.encoding.json")
-def build_alphabet_encoding(input_file_name, output_file_name):
+@ruffus.transform(
+    [extract_balanced_dataset, clean_words],
+    ruffus.suffix(".json.gz"), ".dictionary.json")
+def build_word_dictionary(input_file_name, output_file_name):
+    dictionary = Counter()
+    with gzip.open(input_file_name) as input_file:
+        for line in json.loads(input_file.read()):
+            text, label = line
+            # dictionary.update(text.split())
+            tokenizer = WordPunctTokenizer()
+            dictionary.update(tokenizer.tokenize(text))
+
+    dictionary = list(sorted(w for w in dictionary if dictionary[w] >= 3)) + ['PADDING', 'UNKNOWN']
+
+    with open(output_file_name, 'w') as output_file:
+        output_file.write("{}\n".format(json.dumps(dictionary)))
+
+
+@ruffus.transform(
+    [build_alphabet,
+     build_word_dictionary],
+    ruffus.suffix(".json"), ".encoding.json")
+def build_encoding(input_file_name, output_file_name):
     with open(input_file_name) as input_file:
         alphabet = json.loads(input_file.read())
 
-    alphabet_encoding = dict()
+    encoding = dict()
     for idx, char in enumerate(alphabet):
-        alphabet_encoding[char] = idx
+        encoding[char] = idx
 
     with open(output_file_name, 'w') as output_file:
-        output_file.write("{}\n".format(json.dumps(alphabet_encoding)))
+        output_file.write("{}\n".format(json.dumps(encoding)))
 
 
 

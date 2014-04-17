@@ -261,15 +261,19 @@ if __name__ == "__main__":
     with open(os.path.join(tweets_dir, "tweets_100k.english.alphabet.encoding.json")) as alphabet_file:
         alphabet = json.loads(alphabet_file.read())
 
+    # This model expects lists of words.
+    X = [x.split(" ") for x in X]
 
     train_data_provider = LabelledSequenceMinibatchProvider(
-        X=X[-500:],
-        Y=Y[-500:],
-        batch_size=100)
-
-    validation_data_provider = LabelledSequenceMinibatchProvider(
         X=X[:-500],
         Y=Y[:-500],
+        batch_size=100)
+
+    print train_data_provider.batches_per_epoch
+
+    validation_data_provider = LabelledSequenceMinibatchProvider(
+        X=X[-500:],
+        Y=Y[-500:],
         batch_size=500)
 
 
@@ -281,14 +285,14 @@ if __name__ == "__main__":
             ),
 
             SentenceConvolution(
-                n_feature_maps=5,
+                n_feature_maps=10,
                 kernel_width=5,
                 n_channels=1,
                 n_input_dimensions=16),
 
             SumFolding(),
 
-            KMaxPooling(k=4),
+            KMaxPooling(k=2),
             MaxFolding(),
 
             Tanh(),
@@ -307,7 +311,7 @@ if __name__ == "__main__":
 
             SentenceConvolution(
                 n_feature_maps=5,
-                kernel_width=8,
+                kernel_width=10,
                 n_channels=1,
                 n_input_dimensions=80),
 
