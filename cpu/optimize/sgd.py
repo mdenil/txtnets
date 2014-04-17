@@ -3,10 +3,11 @@ __author__ = 'mdenil'
 import numpy as np
 
 class SGD(object):
-    def __init__(self, model, objective, update_rule):
+    def __init__(self, model, objective, update_rule, regularizer=None):
         self.model = model
         self.objective = objective
         self.update_rule = update_rule
+        self.regularizer = regularizer
 
     def __iter__(self):
         return self
@@ -21,6 +22,15 @@ class SGD(object):
                 p += g
 
         cost, grads = self.objective.evaluate(self.model)
+
+        if self.regularizer:
+            reg_cost, reg_grads = self.regularizer.regularize(self.model)
+
+            cost += reg_cost
+            iteration_info['reg_cost'] = reg_cost
+
+            for g, rg in zip(grads, reg_grads):
+                g += rg
 
         iteration_info['cost'] = cost
         iteration_info['grad_mean_abs_values'] = [np.mean(np.abs(g)) for g in grads]
