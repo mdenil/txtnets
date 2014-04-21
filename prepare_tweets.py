@@ -16,9 +16,6 @@ SMILIES = set([">:]", ":-)", ":)", ":]", ":3", "=]", "8)", "=)", ">:D", ":D", "8
 HAPPY_SMILIES = set([">:]", ":-)", ":)", ":]", ":3", "=]", "8)", "=)", ">:D", ":D", "8D", "xD", "XD", "=3", "8-)", ":-))", ":-P", ":P", "x-p", "xp", "XP", ":-p", ":p", "=p", ":-b", ":b", ">:o", ">:O", ":-O", ":O", ">;]", ";-)", ";)", ";-]", ";]", ";D", ";^)", ">:P", ">:)", ">;)"])
 UNHAPPY_SMILIES = list(set(SMILIES) - set(HAPPY_SMILIES))
 
-# Taking this out...
-# Right now this data set is cheating because it leaves the labels in the training data, but this should at least
-# let me see if the character level features can capture useful info.
 
 
 def detect_language(text):
@@ -156,7 +153,6 @@ def build_alphabet(input_file_name, output_file_name):
 
             alphabet = alphabet.union(text)
 
-    # U,H,L = USER, HASHTAG, LINK
     alphabet = list(sorted(alphabet)) + ['START', 'END', 'UNKNOWN', 'PADDING']
 
     with open(output_file_name, 'w') as output_file:
