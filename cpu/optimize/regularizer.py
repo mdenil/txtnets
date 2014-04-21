@@ -6,10 +6,8 @@ class L2Regularizer(object):
     def __init__(self, lamb):
         self.lamb = lamb
 
-    def regularize(self, model):
-        params = model.params()
+    def cost(self, model):
+        return sum(self.lamb * np.sum(p**2) for p in model.params())
 
-        cost = sum(self.lamb * np.sum(p**2) for p in params)
-        grads = [2.0 * self.lamb * p for p in params]
-
-        return cost, grads
+    def grads(self, model):
+        return [2.0 * self.lamb * p for p in model.params()]
