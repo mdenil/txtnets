@@ -12,7 +12,7 @@ class Linear(layer.Layer):
         self.n_input = n_input
         self.n_output = n_output
 
-        self.W = 0.0025 * np.random.standard_normal(size=(self.n_input, self.n_output))
+        self.W = 0.1 * np.random.standard_normal(size=(self.n_input, self.n_output))
 
 
     def fprop(self, X, meta):
@@ -72,7 +72,7 @@ class Softmax(layer.Layer):
         self.n_classes = n_classes
         self.n_input_dimensions = n_input_dimensions
 
-        self.W = 0.0025 * np.random.standard_normal(size=(self.n_input_dimensions, self.n_classes))
+        self.W = 0.1 * np.random.standard_normal(size=(self.n_input_dimensions, self.n_classes))
         self.b = np.zeros(shape=(1, self.n_classes))
 
     def fprop(self, X, meta):
@@ -155,7 +155,7 @@ class SentenceConvolution(layer.Layer):
         self.n_channels = n_channels
         self.n_threads = n_threads
 
-        self.W = 0.0025 * np.random.standard_normal(
+        self.W = 0.1 * np.random.standard_normal(
             size=(self.n_feature_maps, self.n_input_dimensions, self.n_channels, self.kernel_width))
         self._kernel_space = space.Space.infer(self.W, ['f', 'd', 'c', 'w'])
         self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfdc', 'w'])
