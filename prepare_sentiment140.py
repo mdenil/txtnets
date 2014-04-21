@@ -16,7 +16,6 @@ from nltk.tokenize import WordPunctTokenizer
 data_dir = os.environ['DATA']
 sentiment_dir = os.path.join(data_dir, "sentiment140")
 
-@ruffus.follows(ruffus.mkdir(sentiment_dir))
 @ruffus.originate(["trainingandtestdata.zip"])
 def download_data(output_file):
     sh.wget("-O", output_file, "http://cs.stanford.edu/people/alecmgo/trainingandtestdata.zip")
@@ -143,5 +142,8 @@ def encode_alphabet(input_file, output_file):
         alphabet_dictionary.write(json.dumps(alphabet))
 
 if __name__ == "__main__":
+    if not os.path.exists(sentiment_dir):
+        os.makedirs(sentiment_dir)
+
     sh.cd(sentiment_dir)
     ruffus.pipeline_run(verbose=3, multiprocess=psutil.NUM_CPUS)
