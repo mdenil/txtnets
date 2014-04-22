@@ -17,8 +17,6 @@ class KMaxPooling(layer.Layer):
         # FIXME: this is a hack to guarantee statelessness
         X = X.copy()
 
-        print working_space
-
         d, f, b, w = working_space.get_extents(['d', 'f', 'b', 'w'])
 
         X, working_space = working_space.transform(X, [('d','f','b'), 'w'])

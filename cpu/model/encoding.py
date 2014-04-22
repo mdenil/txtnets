@@ -13,7 +13,7 @@ class DictionaryEncoding(layer.Layer):
         X = [self._encode(x) for x in X]
         X = np.vstack([np.atleast_2d(x) for x in X])
 
-        X_space = space.Space.infer(X, ['b', 'w'])
+        X_space = space.CPUSpace.infer(X, ['b', 'w'])
 
         meta = {
             'lengths': meta['lengths'],

@@ -81,6 +81,6 @@ class WordEmbedding(layer.Layer):
         I_extent['b'] = working_space.get_extent('b')
         I_extent['w'] = working_space.get_extent('w')
         I_extent['d'] = self.vocabulary_size
-        I_space = space.Space([('b','w'), 'd'], I_extent)
+        I_space = space.CPUSpace([('b','w'), 'd'], I_extent)
 
         return I, I_space

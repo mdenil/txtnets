@@ -28,7 +28,7 @@ class MinibatchDataProvider(object):
 
         meta = {
             'lengths': lengths_batch,
-            'space_below': space.Space.infer(X_batch, axes=['b', 'w']),
+            'space_below': space.CPUSpace.infer(X_batch, axes=['b', 'w']),
             }
 
         return X_batch, Y_batch, meta
@@ -59,7 +59,7 @@ class BatchDataProvider(object):
     def next_batch(self):
         meta = {
             'lengths': self.lengths,
-            'space_below': space.Space.infer(self.X, axes=['b', 'w'])
+            'space_below': space.CPUSpace.infer(self.X, axes=['b', 'w'])
         }
 
         return self.X, self.Y, meta
@@ -90,7 +90,7 @@ class PaddedSequenceMinibatchProvider(object):
 
         meta = {
             'lengths': lengths_batch,
-            'space_below': space.Space.infer(X_batch, axes=['b', 'w'])
+            'space_below': space.CPUSpace.infer(X_batch, axes=['b', 'w'])
         }
 
         return X_batch, meta
@@ -130,7 +130,6 @@ class LabelledSequenceMinibatchProvider(object):
 
         Y_batch = np.equal.outer(Y_batch, np.arange(np.max(Y_batch)+1)).astype(np.float)
 
-
         lengths_batch = np.asarray(map(len, X_batch))
         max_length_batch = int(lengths_batch.max())
 
@@ -138,7 +137,7 @@ class LabelledSequenceMinibatchProvider(object):
 
         meta = {
             'lengths': lengths_batch,
-            'space_below': space.Space(axes=['b', 'w'], extent=OrderedDict([('b', len(X_batch)), ('w', max_length_batch)]))
+            'space_below': space.CPUSpace(axes=['b', 'w'], extents=OrderedDict([('b', len(X_batch)), ('w', max_length_batch)]))
         }
 
         return X_batch, Y_batch, meta

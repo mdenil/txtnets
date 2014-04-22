@@ -33,11 +33,9 @@ class Space(object):
         new_axes = _canonical_axes_description(new_axes)
 
         new_space = self
-        print new_space, new_axes
 
         # add any new axes needed
         new_space = new_space.with_axes(_fold_axes(new_axes))
-        print new_space, new_axes
 
         # remove any size 1 axes that aren't in new_axes
         axes_to_drop = set(new_space.folded_axes) - set(_fold_axes(new_axes))

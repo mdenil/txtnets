@@ -17,7 +17,7 @@ class CSM(layer.Layer):
     def fprop(self, X, meta, num_layers=None, return_state=False, input_axes=None):
         if 'space_below' not in meta:
             assert input_axes is not None
-            meta['space_below'] = space.Space.infer(X, input_axes)
+            meta['space_below'] = space.CPUSpace.infer(X, input_axes)
 
         # HACK: spaces only understand matrices right now
         if isinstance(X, np.ndarray) and not meta['space_below'].is_compatible_shape(X):
