@@ -19,6 +19,23 @@ class Space(object):
         if not self.folded_axes == tuple(self._extents.keys()):
             raise ValueError("Cannot construct a space with axes={} and extents={}".format(self.axes, self.extents))
 
+    # This interface must be implemented by subclasses.
+
+    def fold(self, X):
+        raise NotImplementedError
+
+    def unfold(self, X):
+        raise NotImplementedError
+
+    def transpose(self, X, new_axes):
+        raise NotImplementedError
+
+    def broadcast(self, X, **replicas):
+        raise NotImplementedError
+
+    def add_axes(self, X, axes_to_add):
+        raise NotImplementedError
+
     @classmethod
     def infer(cls, X, axes):
         axes = _canonical_axes_description(axes)
@@ -45,7 +62,7 @@ class Space(object):
         new_space = new_space.without_axes(axes_to_drop)
         # Reshape away the axes we just dropped. All of the dropped axes have size 1 so this doesn't
         # actually change the number of elements in the space, we're just updating metadata here.
-        X = new_space._unfold(X)
+        X = new_space.unfold(X)
 
         new_space.check_compatible_shape(X)
 
@@ -69,7 +86,7 @@ class Space(object):
         new_axes = _canonical_axes_description(new_axes)
 
         if set(self.folded_axes) != set(_fold_axes(new_axes)):
-            raise ValueError("Axes incompatible for transpose. self.axes={}, new_axes={}".format(
+            raise ValueError("Axes incompatible for transposed. self.axes={}, new_axes={}".format(
                 self.axes, new_axes))
 
         new_extents = OrderedDict((axis, self._extents[axis]) for axis in _fold_axes(new_axes))
