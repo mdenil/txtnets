@@ -23,7 +23,7 @@ class Softmax(unittest.TestCase):
         self.Y = np.random.randint(0, self.n_classes, size=b)
         self.Y = np.equal.outer(self.Y, np.arange(self.n_classes)).astype(self.X.dtype)
 
-        self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
+        self.X_space = space.CPUSpace.infer(self.X, ['w', 'f', 'd', 'b'])
 
         self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
@@ -32,7 +32,7 @@ class Softmax(unittest.TestCase):
     def test_fprop(self):
         actual, _, _ = self.layer.fprop(self.X, meta=dict(self.meta))
 
-        X, X_space = self.X_space.transform(self.X, ['b', 'wfd'])
+        X, X_space = self.X_space.transform(self.X, ('b', ('w', 'f', 'd')))
 
         expected = np.exp(np.dot(X, self.layer.W) + self.layer.b)
         expected /= np.sum(expected, axis=1, keepdims=True)
@@ -117,7 +117,7 @@ class Bias(unittest.TestCase):
         self.layer.b = np.random.standard_normal(size=self.layer.b.shape)
 
         self.X = np.random.standard_normal(size=(b,w,f,d))
-        self.X_space = space.Space.infer(self.X, ['b', 'w', 'f', 'd'])
+        self.X_space = space.CPUSpace.infer(self.X, ['b', 'w', 'f', 'd'])
         self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
 
@@ -177,7 +177,7 @@ class SentenceConvolution(unittest.TestCase):
         self.X = np.random.standard_normal(size=(b,w,d,c))
 
         # features in the X_space are channels in the convolution layer
-        self.X_space = space.Space.infer(self.X, ['b', 'w', 'd', 'f'])
+        self.X_space = space.CPUSpace.infer(self.X, ['b', 'w', 'd', 'f'])
         self.meta = {'lengths': np.random.randint(1, w, size=b), 'space_below': self.X_space}
 
         # Using this causes test_grad_W to fail if you forget to flip delta before the convolution when computing
@@ -236,7 +236,7 @@ class Linear(unittest.TestCase):
 
         self.X = np.random.standard_normal(size=(b,w,d,f))
 
-        self.X_space = space.Space.infer(self.X, ['b', 'w', 'd', 'f'])
+        self.X_space = space.CPUSpace.infer(self.X, ['b', 'w', 'd', 'f'])
         self.meta = {'lengths': np.random.randint(1, w, size=b), 'space_below': self.X_space}
 
         # Using this causes test_grad_W to fail if you forget to flip delta before the convolution when computing

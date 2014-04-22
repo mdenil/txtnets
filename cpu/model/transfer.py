@@ -17,11 +17,11 @@ class Linear(layer.Layer):
 
     def fprop(self, X, meta):
 
-        X, X_space = meta['space_below'].transform(X, ['b', 'wfd'])
+        X, X_space = meta['space_below'].transform(X, ['b', ('w','f','d')])
 
         Y = np.dot(X, self.W)
-        Y_space = space.Space.infer(Y, ['b', 'd'])
-        assert Y_space.is_compatable_shape(Y)
+        Y_space = space.CPUSpace.infer(Y, ['b', 'd'])
+        assert Y_space.is_compatible_shape(Y)
 
         lengths_below = meta['lengths']
         meta['lengths'] = np.ones_like(meta['lengths'])
@@ -47,9 +47,9 @@ class Linear(layer.Layer):
     def grads(self, delta, meta, fprop_state):
         X = fprop_state['X']
         X_space = fprop_state['X_space']
-        X, X_space = X_space.transform(X, ['b', 'wfd'])
+        X, X_space = X_space.transform(X, ['b', ('w','f','d')])
 
-        delta, delta_space = meta['space_above'].transform(delta, ['b', 'wfd'])
+        delta, delta_space = meta['space_above'].transform(delta, ['b', ('w','f','d')])
 
         grad_W = np.dot(X.T, delta)
 
@@ -77,7 +77,7 @@ class Softmax(layer.Layer):
 
     def fprop(self, X, meta):
 
-        X, X_space = meta['space_below'].transform(X, ['b', 'wfd'])
+        X, X_space = meta['space_below'].transform(X, ('b', ('w', 'f', 'd')))
 
         if not X.shape[1] == self.W.shape[0]:
             raise ValueError("Cannot multiply X.shape={} ({}) with W.shape={}".format(X.shape, X_space, self.W.shape))
@@ -85,9 +85,9 @@ class Softmax(layer.Layer):
         Y = np.exp(np.dot(X, self.W) + self.b)
         Y /= np.sum(Y, axis=1, keepdims=True)
 
-        Y_space = X_space.without_axes('wf')
-        Y_space = Y_space.with_extent(d=self.n_classes)
-        assert Y_space.is_compatable_shape(Y)
+        Y_space = X_space.without_axes(('w', 'f'))
+        Y_space = Y_space.with_extents(d=self.n_classes)
+        assert Y_space.is_compatible_shape(Y)
 
         lengths_below = meta['lengths']
         meta['lengths'] = np.ones_like(meta['lengths'])
@@ -106,7 +106,7 @@ class Softmax(layer.Layer):
     def bprop(self, delta, meta, fprop_state):
         Y = fprop_state['Y']
 
-        assert fprop_state['Y_space'].is_compatable_shape(Y)
+        assert fprop_state['Y_space'].is_compatible_shape(Y)
 
         delta, delta_space = meta['space_above'].transform(delta, ['b', 'd'])
 
@@ -120,15 +120,14 @@ class Softmax(layer.Layer):
         X = fprop_state['X']
         Y = fprop_state['Y']
         X_space = fprop_state['X_space']
-        X, X_space = X_space.transform(X, ['b', 'wfd'])
+        X, X_space = X_space.transform(X, ('b', ('w', 'f', 'd')))
 
-        delta, delta_space = meta['space_above'].transform(delta, ['b', 'wfd'])
+        delta, delta_space = meta['space_above'].transform(delta, ('b', ('w', 'f', 'd')))
 
         delta = delta * Y * (1-Y)
 
         grad_W = np.dot(X.T, delta)
         grad_b = delta.sum(axis=0).reshape(self.b.shape)
-        # grad_b = delta.mean(axis=0).reshape(self.b.shape)
 
         return [grad_W, grad_b]
 
@@ -157,8 +156,8 @@ class SentenceConvolution(layer.Layer):
 
         self.W = 0.1 * np.random.standard_normal(
             size=(self.n_feature_maps, self.n_input_dimensions, self.n_channels, self.kernel_width))
-        self._kernel_space = space.Space.infer(self.W, ['f', 'd', 'c', 'w'])
-        self.W, self._kernel_space = self._kernel_space.transform(self.W, ['bfdc', 'w'])
+        self._kernel_space = space.CPUSpace.infer(self.W, ['f', 'd', 'c', 'w'])
+        self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'f', 'd', 'c'), 'w'])
 
     def fprop(self, X, meta):
 
@@ -192,7 +191,7 @@ class SentenceConvolution(layer.Layer):
             raise ValueError("n_input_dimensions={} but the data has {} dimensions.".format(self.n_input_dimensions, d))
         f = self.n_feature_maps
 
-        X, working_space = working_space.transform(X, ['bfdc', 'w'])
+        X, working_space = working_space.transform(X, [('b', 'f', 'd', 'c'), 'w'])
         X, working_space = working_space.broadcast(X, f=f)
 
         K, _ = self._kernel_space.broadcast(np.fliplr(self.W), b=b)
@@ -204,9 +203,9 @@ class SentenceConvolution(layer.Layer):
         # length of a wide convolution
         lengths = lengths + self.kernel_width - 1
 
-        working_space = working_space.with_extent(w=representation_length)
+        working_space = working_space.with_extents(w=representation_length)
 
-        X, working_space = working_space.transform(X, ['bdf', 'w', 'c'])
+        X, working_space = working_space.transform(X, [('b','d','f'), 'w', 'c'])
         X = X.sum(axis=working_space.axes.index('c'))
         working_space = working_space.without_axes('c')
 
@@ -220,11 +219,11 @@ class SentenceConvolution(layer.Layer):
         lengths = meta['lengths']
         X_space = fprop_state['input_space']
 
-        delta, working_space = working_space.transform(delta, ['bfdc', 'w'], c=X_space.get_extent('c'))
+        delta, working_space = working_space.transform(delta, [('b','f','d','c'), 'w'], c=X_space.get_extent('c'))
         K, _ = self._kernel_space.broadcast(self.W, b=working_space.get_extent('b'))
 
         delta = conv.fftconv1d(delta, K, n_threads=self.n_threads, mode='valid')
-        working_space = working_space.with_extent(w=delta.shape[1])
+        working_space = working_space.with_extents(w=delta.shape[1])
 
         lengths = lengths - self.kernel_width + 1
 
@@ -247,18 +246,18 @@ class SentenceConvolution(layer.Layer):
         X = fprop_state['X']
         X_space = fprop_state['input_space']
 
-        delta, delta_space = delta_space.transform(delta, ['bfdc', 'w'], c=X_space.get_extent('c'))
-        X, X_space = X_space.transform(X, ['bfdc', 'w'], f=delta_space.get_extent('f'))
+        delta, delta_space = delta_space.transform(delta, [('b','f','d','c'), 'w'], c=X_space.get_extent('c'))
+        X, X_space = X_space.transform(X, [('b','f','d','c'), 'w'], f=delta_space.get_extent('f'))
 
         grad_W = conv.fftconv1d(np.fliplr(delta), X, n_threads=self.n_threads, mode='valid')
-        grad_W_space = delta_space.with_extent(w=grad_W.shape[1])
+        grad_W_space = delta_space.with_extents(w=grad_W.shape[1])
 
         grad_W, grad_W_space = grad_W_space.transform(grad_W, grad_W_space.folded_axes)
 
         grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
         grad_W_space = grad_W_space.without_axes('b')
 
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, ['bfdc', 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b','f','d','c'), 'w'])
 
         return [grad_W]
 
@@ -306,7 +305,7 @@ class Bias(layer.Layer):
     def grads(self, delta, meta, fprop_state):
         working_space = meta['space_above']
 
-        delta, working_space = working_space.transform(delta, ['f', 'd', 'bw'])
+        delta, working_space = working_space.transform(delta, ['f', 'd', ('b', 'w')])
         grad_b = delta.sum(axis=2)
 
         return [grad_b]

@@ -24,7 +24,7 @@ class ModelBProp(unittest.TestCase):
         self.Y = np.equal.outer(self.Y, np.arange(n_classes)).astype(self.Y.dtype)
 
         self.meta = {
-            'space_below': space.Space.infer(self.X, ['w', 'd', 'b']),
+            'space_below': space.CPUSpace.infer(self.X, ['w', 'd', 'b']),
             'lengths': np.random.randint(1, sentence_length, size=batch_size),
             }
 
@@ -65,6 +65,9 @@ class ModelBProp(unittest.TestCase):
             delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
             delta, meta = self.model.bprop(delta, meta=dict(meta), fprop_state=fprop_state, return_state=True)
 
+            print "------------------"
+            print delta.shape, meta['space_below']
+
             delta, _ = meta['space_below'].transform(delta, self.meta['space_below'].axes)
             return delta.ravel()
 
@@ -87,7 +90,7 @@ class Model(unittest.TestCase):
         self.Y = np.equal.outer(self.Y, np.arange(n_classes)).astype(self.Y.dtype)
 
         self.meta = {
-            'space_below': space.Space.infer(self.X, ['b', 'w']),
+            'space_below': space.CPUSpace.infer(self.X, ['b', 'w']),
             'lengths': np.random.randint(1, sentence_length, size=batch_size),
         }
 

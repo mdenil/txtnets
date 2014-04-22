@@ -12,7 +12,7 @@ class KMaxPooling(unittest.TestCase):
         w,f,d,b = 10, 2, 3, 5
         self.k = 4
         self.X = np.random.standard_normal(size=(d,f,b,w))
-        self.X_space = space.Space.infer(self.X, ['d', 'f', 'b', 'w'])
+        self.X_space = space.CPUSpace.infer(self.X, ['d', 'f', 'b', 'w'])
 
         self.layer = model.pooling.KMaxPooling(self.k)
         self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
@@ -47,7 +47,7 @@ class DynamicKMaxPooling(unittest.TestCase):
                 [2, 0, 1, 0, 8, 9],
                 [1, 7, 1, 8, 2, 9],
             ]).astype(np.float)
-        self.X_space = space.Space.infer(self.X, ['b', 'w'])
+        self.X_space = space.CPUSpace.infer(self.X, ['b', 'w'])
         self.lengths = np.array([4, 6, 2])
 
         self.layer = model.pooling.KMaxPooling(k=self.k, k_dynamic=self.k_dynamic)
@@ -94,7 +94,7 @@ class SumFolding(unittest.TestCase):
     def setUp(self):
         w,f,d,b = 3, 1, 20, 3
         self.X = np.random.standard_normal(size=(d,f,b,w))
-        self.X_space = space.Space.infer(self.X, ['d', 'f', 'b', 'w'])
+        self.X_space = space.CPUSpace.infer(self.X, ['d', 'f', 'b', 'w'])
 
         self.layer = model.pooling.SumFolding()
         self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
@@ -124,7 +124,7 @@ class MaxFolding(unittest.TestCase):
     def setUp(self):
         w,f,d,b = 3, 1, 20, 3
         self.X = np.random.standard_normal(size=(d,f,b,w))
-        self.X_space = space.Space.infer(self.X, ['d', 'f', 'b', 'w'])
+        self.X_space = space.CPUSpace.infer(self.X, ['d', 'f', 'b', 'w'])
 
         self.layer = model.pooling.MaxFolding()
         self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}

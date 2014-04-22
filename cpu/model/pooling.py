@@ -17,9 +17,11 @@ class KMaxPooling(layer.Layer):
         # FIXME: this is a hack to guarantee statelessness
         X = X.copy()
 
+        print working_space
+
         d, f, b, w = working_space.get_extents(['d', 'f', 'b', 'w'])
 
-        X, working_space = working_space.transform(X, ['dfb', 'w'])
+        X, working_space = working_space.transform(X, [('d','f','b'), 'w'])
 
         fprop_state = {
             "space_below": working_space,
@@ -27,14 +29,14 @@ class KMaxPooling(layer.Layer):
         }
 
         padding_mask = lengths.reshape((-1,1)) <= np.arange(working_space.get_extent('w'))
-        padding_space = space.Space.infer(padding_mask, ['b', 'w'])
-        padding_mask, padding_space = padding_space.transform(padding_mask, ['dfb', 'w'], d=d, f=f)
+        padding_space = space.CPUSpace.infer(padding_mask, ['b', 'w'])
+        padding_mask, padding_space = padding_space.transform(padding_mask, [('d','f','b'), 'w'], d=d, f=f)
 
         if not self.k_dynamic:
             # static pooling
             index_mask = lengths.reshape((-1,1)) <= np.arange(self.k)[::-1]
-            index_space = space.Space.infer(index_mask, ['b', 'w'])
-            index_mask, index_space = index_space.transform(index_mask, ['dfb', 'w'], d=d, f=f)
+            index_space = space.CPUSpace.infer(index_mask, ['b', 'w'])
+            index_mask, index_space = index_space.transform(index_mask, [('d','f','b'), 'w'], d=d, f=f)
             k = self.k
             ks = self.k
 
@@ -61,12 +63,12 @@ class KMaxPooling(layer.Layer):
         fprop_state['index_mask'] = index_mask
         fprop_state['k'] = k
 
-        rows = np.vstack([np.arange(working_space.get_extent('dfb'))] * k).T
+        rows = np.vstack([np.arange(working_space.get_extent(('d','f','b')))] * k).T
 
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
 
-        working_space = working_space.with_extent(w=k)
+        working_space = working_space.with_extents(w=k)
 
         # everything has been truncated to length k or smaller
         lengths = np.minimum(lengths, ks)
@@ -85,15 +87,15 @@ class KMaxPooling(layer.Layer):
         index_mask = np.logical_not(fprop_state['index_mask'])
         k_max_indexes = fprop_state['k_max_indexes']
 
-        delta, working_space = space_above.transform(delta, ['dfb', 'w'])
+        delta, working_space = space_above.transform(delta, [('d','f','b'), 'w'])
 
-        rows = np.vstack([np.arange(space_below.get_extent('dfb'))] * fprop_state['k']).T
+        rows = np.vstack([np.arange(space_below.get_extent(('d','f','b')))] * fprop_state['k']).T
         back = np.zeros(space_below.shape)
-        back, _ = space_below.transform(back, ['dfb', 'w'])
+        back, _ = space_below.transform(back, [('d','f','b'), 'w'])
 
         back[rows[index_mask], k_max_indexes[index_mask]] = delta[index_mask]
 
-        meta['space_below'] = working_space.with_extent(w=space_below.get_extent('w'))
+        meta['space_below'] = working_space.with_extents(w=space_below.get_extent('w'))
         meta['lengths'] = fprop_state['lengths_below']
 
         return back, meta
@@ -122,7 +124,7 @@ class SumFolding(layer.Layer):
 
         X = X[:folded_size] + X[folded_size:]
 
-        working_space = working_space.with_extent(d=folded_size)
+        working_space = working_space.with_extents(d=folded_size)
         meta['space_above'] = working_space
         return X, meta, {}
 
@@ -163,7 +165,7 @@ class MaxFolding(layer.Layer):
         }
 
         Y = np.maximum(X[:folded_size], X[folded_size:])
-        working_space = working_space.with_extent(d=folded_size)
+        working_space = working_space.with_extents(d=folded_size)
 
         meta['space_above'] = working_space
         return Y, meta, fprop_state

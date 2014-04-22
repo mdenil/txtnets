@@ -34,7 +34,7 @@ class CrossEntropy(object):
         delta *= 1.0 / Y_true.shape[0]
 
         meta['space_below'] = fprop_state['input_space']
-        assert meta['space_below'].is_compatable_shape(delta)
+        assert meta['space_below'].is_compatible_shape(delta)
         return delta, meta
 
     def __repr__(self):
@@ -70,7 +70,7 @@ class LargeMarginCost(object):
 
         return delta_clean, delta_dirty, meta
 
-        def __repr__(self):
-            return "{}(margin={})".format(
-                self.__class__.__name__,
-                self.margin)
+    def __repr__(self):
+        return "{}(margin={})".format(
+            self.__class__.__name__,
+            self.margin)

@@ -19,11 +19,11 @@ class WordEmbedding(layer.Layer):
         self.E = 0.0025 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
     def fprop(self, X, meta):
-        X, X_space = meta['space_below'].transform(X, ['bw', 'd'])
+        X, X_space = meta['space_below'].transform(X, [('b','w'), 'd'])
 
         Y = self.E[X.ravel()]
 
-        meta['space_above'] = X_space.with_extent(d=self.dimension)
+        meta['space_above'] = X_space.with_extents(d=self.dimension)
         fprop_state = {
             'X_space': X_space,
             'Y_space': meta['space_above'],
@@ -53,8 +53,8 @@ class WordEmbedding(layer.Layer):
         X = fprop_state['X']
         X_space = fprop_state['X_space']
 
-        delta, delta_space = delta_space.transform(delta, ['bw', 'd'])
-        X, X_space = X_space.transform(X, ['bw', 'd'])
+        delta, delta_space = delta_space.transform(delta, [('b','w'), 'd'])
+        X, X_space = X_space.transform(X, [('b','w'), 'd'])
 
         grad_E = np.zeros_like(self.E)
         for i,j in enumerate(X.ravel()):
@@ -72,7 +72,7 @@ class WordEmbedding(layer.Layer):
             self.vocabulary_size)
 
     def indicator_matrix(self, X, meta):
-        X, working_space = meta['space_below'].transform(X, ['bw'])
+        X, working_space = meta['space_below'].transform(X, [('b','w')])
 
         I = np.zeros((X.size, self.vocabulary_size))
         I[np.arange(X.size), X.ravel()] = 1
@@ -81,6 +81,6 @@ class WordEmbedding(layer.Layer):
         I_extent['b'] = working_space.get_extent('b')
         I_extent['w'] = working_space.get_extent('w')
         I_extent['d'] = self.vocabulary_size
-        I_space = space.Space(['bw', 'd'], I_extent)
+        I_space = space.Space([('b','w'), 'd'], I_extent)
 
         return I, I_space

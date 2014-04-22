@@ -17,7 +17,7 @@ class CrossEntropy(unittest.TestCase):
         self.Y = np.random.uniform(size=(self.n_data, self.n_classes))
         self.Y /= self.Y.sum(axis=1, keepdims=True)
         self.meta = {
-            'space_below': space.Space.infer(self.Y, ['b', 'c'])
+            'space_below': space.CPUSpace.infer(self.Y, ['b', 'c'])
         }
 
         self.Y_true = np.random.randint(0, self.n_classes-1, size=self.n_data)

@@ -12,7 +12,7 @@ class Tanh(unittest.TestCase):
         w,f,d,b = 2, 3, 5, 10
         self.n_classes = 7
         self.X = np.random.standard_normal(size=(w, f, d, b))
-        self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
+        self.X_space = space.CPUSpace.infer(self.X, ['w', 'f', 'd', 'b'])
         self.Y = np.random.randint(0, self.n_classes, size=b)
         self.Y = np.equal.outer(self.Y, np.arange(self.n_classes)).astype(self.X.dtype)
 
@@ -59,7 +59,7 @@ class Relu(unittest.TestCase):
         w,f,d,b = 2, 3, 5, 10
         self.n_classes = 7
         self.X = np.random.standard_normal(size=(w, f, d, b))
-        self.X_space = space.Space.infer(self.X, ['w', 'f', 'd', 'b'])
+        self.X_space = space.CPUSpace.infer(self.X, ['w', 'f', 'd', 'b'])
         self.Y = np.random.randint(0, self.n_classes, size=b)
         self.Y = np.equal.outer(self.Y, np.arange(self.n_classes)).astype(self.X.dtype)
 

@@ -19,7 +19,7 @@ class WordEmbedding(unittest.TestCase):
 
         self.words = np.random.randint(vocabulary_size, size=(3,5))
 
-        self.words_space = space.Space.infer(self.words, ['b', 'w'])
+        self.words_space = space.CPUSpace.infer(self.words, ['b', 'w'])
         self.meta = {'lengths': np.zeros_like(self.words) + self.words.shape[1], 'space_below': self.words_space}
 
 
