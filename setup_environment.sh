@@ -88,7 +88,7 @@ safe_call conda_install numpy scipy mkl
 safe_call conda_install matplotlib
 safe_call conda_install psutil
 safe_call conda_install nose
-safe_call conda_install ipython
+safe_call conda_install ipython pyzmq jinja2 tornado
 safe_call conda_install nltk
 safe_call conda_install pandas
 safe_call pip_install pyprind
