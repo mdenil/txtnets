@@ -6,6 +6,7 @@ __author__ = 'mdenil'
 import operator
 from collections import OrderedDict
 
+
 class Space(object):
     def __init__(self, axes, extents=None):
         self._axes = _canonical_axes_description(axes)
@@ -55,7 +56,6 @@ class Space(object):
         X, new_space = new_space.broadcast(X, **broadcast)
 
         return X, new_space
-
 
     def transposed(self, new_axes):
         """
@@ -154,7 +154,6 @@ class Space(object):
         contracted_axes = tuple(contracted_axes)
 
         return self.__class__(contracted_axes, contracted_extents)
-
 
     def with_extents(self, **extents_to_change):
         """
@@ -263,7 +262,7 @@ class Space(object):
         axis = _canonical_axes_description(axis)
 
         def prod(xs):
-            # special case for empty sequence = 1
+            # special case to make empty sequence = 1
             return reduce(operator.mul, xs) if xs else 1
 
         return prod([self._extents[ax] for ax in _protect_axis(axis) if ax in self._extents])
@@ -301,14 +300,14 @@ def _canonical_axes_description(axes):
 
 
 def _fold_axes(axes):
-    flat_axes = []
+    folded_axes = []
     for axis in axes:
-        flat_axes.extend(_protect_axis(axis))
-    return tuple(flat_axes)
+        folded_axes.extend(_protect_axis(axis))
+    return tuple(folded_axes)
 
 
-def _protect_axis(x):
-    if isinstance(x, basestring):
-        return x,
+def _protect_axis(axis):
+    if isinstance(axis, basestring):
+        return axis,
     else:
-        return x
+        return axis
