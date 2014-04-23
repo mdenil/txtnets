@@ -1,9 +1,15 @@
 #!/bin/bash
 
-ROOT="$(pwd)"
-TOOL_PATH="$ROOT"
-ENV="$ROOT/env"
-export LIB="$ROOT/lib"
+ROOT="$(pwd)/.."
+HERE="$(pwd)"
+TOOL_PATH="$HERE"
+PLATFORM="$(uname)"
+LOCAL_TAG="$HOSTNAME-$PLATFORM"
+EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
+LIB="$ROOT/venvs/$LOCAL_TAG/lib"
+ENV="$ROOT/venvs/$LOCAL_TAG/env"
+
+
 export DATA="$ROOT/data"
 
 function echoerr {
@@ -20,7 +26,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-export PYTHONPATH="$ROOT:$PYTHONPATH"
+export PYTHONPATH="$HERE:$PYTHONPATH"
 export LD_LIBRARY_PATH="$LIB:$LD_LIBRARY_PATH"
 export DYLD_LIBRARY_PATH="$LIB:$DYLD_LIBRARY_PATH" # for osx
 

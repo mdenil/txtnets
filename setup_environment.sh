@@ -3,11 +3,12 @@
 set -e
 
 ROOT="$(pwd)"
-ENV="$ROOT/env"
-EXTERNAL="$ROOT/external"
-LIB="$ROOT/lib"
 DATA="$ROOT/data"
 PLATFORM="$(uname)"
+LOCAL_TAG="$HOSTNAME-$PLATFORM"
+EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
+LIB="$ROOT/venvs/$LOCAL_TAG/lib"
+ENV="$ROOT/venvs/$LOCAL_TAG/env"
 
 function safe_call {
     # usage:

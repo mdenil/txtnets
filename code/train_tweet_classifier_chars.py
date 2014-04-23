@@ -92,7 +92,7 @@ if __name__ == "__main__":
     # exit(0)
 
     #
-    tweets_dir = os.path.join("data", "sentiment140")
+    tweets_dir = os.path.join("../data", "sentiment140")
 
     # with open(os.path.join(tweets_dir, "sentiment140.train.json")) as data_file:
     with open(os.path.join(tweets_dir, "sentiment140.train.clean.json")) as data_file:
