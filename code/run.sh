@@ -11,6 +11,7 @@ ENV="$ROOT/venvs/$LOCAL_TAG/env"
 
 
 export DATA="$ROOT/data"
+export RESULTS="$ROOT/results"
 
 function echoerr {
     echo "$@" 1>&2

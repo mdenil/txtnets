@@ -4,6 +4,7 @@ set -e
 
 ROOT="$(pwd)"
 DATA="$ROOT/data"
+RESULTS="$ROOT/results"
 PLATFORM="$(uname)"
 LOCAL_TAG="$HOSTNAME-$PLATFORM"
 EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
@@ -74,9 +75,21 @@ function install_scikits-cuda {
     python setup.py install
 }
 
+function install_reikna {
+    cd "$EXTERNAL"
+
+    git clone https://github.com/Manticore/reikna.git
+
+    cd reikna
+
+    python setup.py install
+}
+
+
 mkdir -p "$EXTERNAL"
 mkdir -p "$LIB"
 mkdir -p "$DATA"
+mkdir -p "$RESULTS"
 
 export LD_LIBRARY_PATH="$LIB"
 
@@ -99,3 +112,9 @@ safe_call pip_install ruffus
 safe_call pip_install sh
 safe_call pip_install simplejson
 safe_call install_cld2
+
+if [ "$1" == "--cuda" ]; then
+    safe_call install_pycuda
+    safe_call install_scikits-cuda
+    safe_call install_reikna
+fi
