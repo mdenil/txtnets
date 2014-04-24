@@ -13,7 +13,7 @@ from nltk.tokenize import WordPunctTokenizer
 
 # http://help.sentiment140.com/for-students
 
-data_dir = os.environ['DATA']
+data_dir = "../data"
 sentiment_dir = os.path.join(data_dir, "sentiment140")
 
 @ruffus.originate(["trainingandtestdata.zip"])
