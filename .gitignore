@@ -1,7 +1,6 @@
-env/
+venvs/
 data/
-lib/
-external/
+results/
 .pkgs/
 .idea/
 cnn-sm-gpu-kmax
