@@ -40,8 +40,8 @@ def fftconv1d(X, K, mode='full', n_threads=1):
 
     # trim
 
-    if  kw > xw and mode == 'full':
-        X = X[:, :-kw+1]
+    if kw > xw and mode == 'full':
+        X = X[:, :xw + kw - 1]
     elif mode == 'valid':
         X = X[:, kw-1:-kw+1]
 
