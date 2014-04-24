@@ -33,9 +33,6 @@ class Space(object):
     def broadcast(self, X, **replicas):
         raise NotImplementedError
 
-    def add_axes(self, X, axes_to_add):
-        raise NotImplementedError
-
     @classmethod
     def infer(cls, X, axes):
         axes = _canonical_axes_description(axes)
@@ -71,6 +68,18 @@ class Space(object):
 
         # broadcast any of the requested axes
         X, new_space = new_space.broadcast(X, **broadcast)
+
+        return X, new_space
+
+    def add_axes(self, X, axes_to_add):
+        self.check_compatible_shape(X)
+
+        axes_to_add = _canonical_axes_description(axes_to_add)
+
+        new_space = self.with_axes(axes_to_add)
+        X = new_space.unfold(X)
+
+        new_space.check_compatible_shape(X)
 
         return X, new_space
 

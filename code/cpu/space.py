@@ -31,22 +31,6 @@ class CPUSpace(Space):
 
         return X, new_space
 
-    def add_axes(self, X, axes_to_add):
-        self.check_compatible_shape(X)
-
-        axes_to_add = _canonical_axes_description(axes_to_add)
-
-        new_space = self.with_axes(axes_to_add)
-
-        # some of the axes_to_add may already exist, that's okay.
-        new_axes = set(new_space.folded_axes) - set(self.folded_axes)
-        for axis in new_axes:
-            X = X[..., np.newaxis]
-
-        new_space.check_compatible_shape(X)
-
-        return X, new_space
-
     def broadcast(self, X, **replicas):
         self.check_compatible_shape(X)
 
