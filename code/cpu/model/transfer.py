@@ -64,7 +64,6 @@ class Linear(layer.Layer):
             self.W.shape)
 
 
-
 class Softmax(layer.Layer):
     def __init__(self,
                  n_classes,
@@ -138,6 +137,7 @@ class Softmax(layer.Layer):
         return "{}(W={})".format(
             self.__class__.__name__,
             self.W.shape)
+
 
 class SentenceConvolution(layer.Layer):
     def __init__(self,

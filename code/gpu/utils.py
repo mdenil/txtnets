@@ -5,9 +5,11 @@ import numpy as np
 
 import pycuda.autoinit
 import pycuda.gpuarray
+import pycuda.compiler
 
 import reikna.cluda
 import reikna.algorithms
+
 
 def cpu_to_gpu(X):
     return pycuda.gpuarray.to_gpu(X)
@@ -22,14 +24,38 @@ cuda_api = reikna.cluda.cuda_api()
 cuda_thread = cuda_api.Thread.create()
 
 
+
 def transpose(X, axes):
     # The reikna Transpose algorithm doesn't understand the identity transposition
     if list(axes) == range(len(axes)):
         return X
 
-    # TODO: can this be cached? does it matter?
-    global cuda_thread
-    apply_transpose = reikna.algorithms.Transpose(X, axes).compile(cuda_thread)
+    # Okay, so we're being a bit tricky here.
+    #
+    # Caching the transpose operations is important because they take a long time to build and compile.  However,
+    # to construct a Transpose I need to pass in X, and we need to be careful that the key contains all of the relevant
+    # info that could make a transpose different.
+    #
+    # The Transpose constructor:
+    #
+    # https://github.com/Manticore/reikna/blob/develop/reikna/algorithms/transpose.py#L89
+    #
+    # uses axes and X.shape and X.dtype.  It also uses X to construct an Annotation:
+    #
+    # https://github.com/Manticore/reikna/blob/develop/reikna/core/signature.py#L103
+    #
+    # which in turn calles Type.from_value:
+    #
+    # https://github.com/Manticore/reikna/blob/develop/reikna/core/signature.py#L68
+    #
+    # This factory stores X.dtype, X.shape and X.strides
+    key = (X.shape, X.dtype, X.strides, tuple(axes))
+    try:
+        apply_transpose = transpose.compiled_cache[key]
+    except KeyError:
+        global cuda_thread
+        apply_transpose = reikna.algorithms.Transpose(X, axes).compile(cuda_thread)
+        transpose.compiled_cache[key] = apply_transpose
 
     # TODO: allow out to be passed as a parameter to avoid reallocation
     out = pycuda.gpuarray.empty(apply_transpose.parameter.output.shape, X.dtype)
@@ -37,6 +63,119 @@ def transpose(X, axes):
     apply_transpose(out, X)
     return out
 
+transpose.compiled_cache = {}
+
+
+
+_broadcast_module = pycuda.compiler.SourceModule("""
+__global__ void broadcast_kernel(
+    float* source, int *source_shape, int* source_stride, int rank, float *dest, int *dest_shape, int *dest_stride,
+    int dest_size)
+{
+    const int dest_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (dest_index < dest_size) {
+
+        // figure out where the source element lives
+        int source_index = 0;
+        for (int i = 0; i < rank; ++i) {
+            int dest_coordinate = dest_index / (dest_stride[i] / sizeof(float)) % dest_shape[i];
+            int source_coordinate = dest_coordinate % source_shape[i];
+            source_index += source_coordinate * source_stride[i] / sizeof(float);
+        }
+
+        float* dest_element = dest + dest_index;
+        float* source_element = source + source_index;
+
+        *dest_element = *source_element;
+    }
+}
+""")
+_broadcast_kernel = _broadcast_module.get_function("broadcast_kernel")
+
+def broadcast(x, expanded_shape, out=None, block_size=256):
+    assert len(x.shape) == len(expanded_shape)
+
+    rank = len(expanded_shape)
+
+    try:
+        x_shape, x_stride, y_shape, y_stride = broadcast._shape_cache[rank]
+    except KeyError:
+        x_shape = pycuda.gpuarray.empty(rank, dtype=np.int32)
+        x_stride = pycuda.gpuarray.empty(rank, dtype=np.int32)
+        y_shape = pycuda.gpuarray.empty(rank, dtype=np.int32)
+        y_stride = pycuda.gpuarray.empty(rank, dtype=np.int32)
+        broadcast._shape_cache[rank] = x_shape, x_stride, y_shape, y_stride
+
+    x_shape.set(np.asarray(x.shape, dtype=np.int32))
+    x_stride.set(np.asarray(x.strides, dtype=np.int32))
+
+    if out is None:
+        y = pycuda.gpuarray.empty(expanded_shape, dtype=np.float32)
+    else:
+        y = out
+
+    y_shape.set(np.asarray(y.shape, dtype=np.int32))
+    y_stride.set(np.asarray(y.strides, dtype=np.int32))
+
+    global _broadcast_kernel
+
+    _broadcast_kernel(
+        x,
+        x_shape,
+        x_stride,
+        np.int32(len(x.shape)),
+        y,
+        y_shape,
+        y_stride,
+        np.int32(y.size),
+        block=(block_size, 1, 1),
+        grid=(y.size / block_size + 1, 1))
+
+    return y
+
+
+broadcast._shape_cache = {}
+
+
+# def stack(X, axis, times):
+#     """
+#     Stack times copies of X along axis.
+#
+#     Right now this is implemented by permuting the target axis to the left, stacking vertically, and then permuting
+#     back, so it will be significantly more efficient to stack along the first axis than a different one.
+#     """
+#     # store the shape so we can restore it later
+#     original_shape = X.shape
+#
+#     # transpose the axis to be first
+#     perm = [axis] + [ax for ax in range(len(X.shape)) if ax != axis]
+#     assert len(perm) == len(X.shape)
+#     X = transpose(X, perm)
+#
+#     target_permuted_shape = (X.shape[0] * times, ) + X.shape[1:]
+#
+#     # The 2d shape of X.  From now on we assume X is in row-major order.
+#     flat_shape = (X.shape[0], int(np.prod(X.shape[1:])))
+#     X = X.reshape(flat_shape)
+#
+#     # stack times copies of X vertically
+#     Y = pycuda.gpuarray.empty((flat_shape[0]*times, flat_shape[1]), dtype=X.dtype)
+#     # TODO: use Y to Y copies to reduce the number of copies
+#     for t in xrange(times):
+#         _copy_paste_2d(X, 0, 0, flat_shape[0], flat_shape[1], Y, t * flat_shape[0], 0)
+#
+#     # restore the extra dimensions in the stacked data
+#     Y = Y.reshape(target_permuted_shape)
+#
+#     # invert the permutation so Y has the same axis order as the original X
+#     inverse_perm = tuple(perm.index(i) for i in xrange(len(perm)))
+#     Y = transpose(Y, inverse_perm)
+#
+#     return Y
+
+
+_copy_2d = pycuda.driver.Memcpy2D()
 
 def stack(X, axis, times):
     """
@@ -45,25 +184,65 @@ def stack(X, axis, times):
     Right now this is implemented by permuting the target axis to the left, stacking vertically, and then permuting
     back, so it will be significantly more efficient to stack along the first axis than a different one.
     """
-    # store the shape so we can restore it later
-    original_shape = X.shape
 
     # transpose the axis to be first
     perm = [axis] + [ax for ax in range(len(X.shape)) if ax != axis]
     assert len(perm) == len(X.shape)
     X = transpose(X, perm)
 
+    permuted_shape = X.shape
     target_permuted_shape = (X.shape[0] * times, ) + X.shape[1:]
 
-    # The 2d shape of X.  From now on we assume X is in row-major order.
+    # flatten X to 2d
     flat_shape = (X.shape[0], int(np.prod(X.shape[1:])))
     X = X.reshape(flat_shape)
 
-    # stack times copies of X vertically
+    # allocate flat memory for the broadcasted result
     Y = pycuda.gpuarray.empty((flat_shape[0]*times, flat_shape[1]), dtype=X.dtype)
-    # TODO: use Y to Y copies to reduce the number of copies
-    for t in xrange(times):
-        _copy_paste_2d(X, 0, 0, flat_shape[0], flat_shape[1], Y, t * flat_shape[0], 0)
+
+
+    sh, sw = X.shape
+    dh, dw = Y.shape
+    sr = 0
+    sc = 0
+    nr = flat_shape[0]
+    nc = flat_shape[1]
+    dr = 0
+    dc = 0
+
+    global _copy_2d
+
+    # Set and describe copy source
+    _copy_2d.set_src_device(X.gpudata)
+    _copy_2d.src_x_in_bytes = sc * X.dtype.itemsize
+    _copy_2d.src_y = sr
+    _copy_2d.src_pitch = sw * X.dtype.itemsize
+
+    # Set and describe copy destination
+    _copy_2d.set_dst_device(Y.gpudata)
+    _copy_2d.dst_x_in_bytes = dc * Y.dtype.itemsize
+    _copy_2d.dst_y = dr
+    _copy_2d.dst_pitch = dw * Y.dtype.itemsize
+
+    # Describe copy extent
+    _copy_2d.width_in_bytes = nc * Y.dtype.itemsize
+    _copy_2d.height = nr
+
+    # move the first copy of X
+    _copy_2d(aligned=True)
+
+    # move the source pointer to start copying Y to itself
+    _copy_2d.set_src_device(Y.gpudata)
+
+    dr += sh
+    while dr < dh:
+        _copy_2d.dst_y = dr
+        _copy_2d.height = min(nr, dh - dr)
+
+        _copy_2d(aligned=True)
+
+        dr += _copy_2d.height
+        nr += _copy_2d.height
 
     # restore the extra dimensions in the stacked data
     Y = Y.reshape(target_permuted_shape)
@@ -73,6 +252,7 @@ def stack(X, axis, times):
     Y = transpose(Y, inverse_perm)
 
     return Y
+
 
 
 def _copy_paste_2d(src, sr, sc, nr, nc, dst, dr, dc):

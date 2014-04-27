@@ -39,7 +39,6 @@ class TestGPUSpace(unittest.TestCase):
         X_gpu, gpu_space = GPUSpace.from_cpu(self.X_cpu, self.cpu_space)
 
         for axes in itertools.permutations(self.cpu_space.axes):
-            print axes
             Y_cpu, Y_cpu_space = self.cpu_space.transpose(self.X_cpu, axes)
             Y_gpu, Y_gpu_space = gpu_space.transpose(X_gpu, axes)
 

@@ -98,7 +98,6 @@ class CSM(layer.Layer):
 
         for layer_index, layer, layer_fprop_state in reversed(zip(itertools.count(), self.layers, layer_fprop_states)):
 
-
             if layer_index < len(self.layers) - 1:
                 meta['space_above'] = meta['space_below']
             if 'space_below' in meta:

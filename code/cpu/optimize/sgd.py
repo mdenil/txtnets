@@ -23,16 +23,16 @@ class SGD(object):
         cost, grads = self.objective.evaluate(self.model)
 
         iteration_info['cost'] = cost
-        iteration_info['grad_mean_abs_values'] = [np.mean(np.abs(g)) for g in grads]
+        # iteration_info['grad_mean_abs_values'] = [np.mean(np.abs(g)) for g in grads]
 
         updates = self.update_rule.updates(grads)
 
-        iteration_info['updates_mean_abs_values'] = [np.mean(np.abs(u)) for u in updates]
+        # iteration_info['updates_mean_abs_values'] = [np.mean(np.abs(u)) for u in updates]
 
         for p, g in zip(self.model.params(), updates):
             p += g
 
-        iteration_info['param_mean_abs_values'] = [np.mean(np.abs(p)) for p in self.model.params()]
+        # iteration_info['param_mean_abs_values'] = [np.mean(np.abs(p)) for p in self.model.params()]
 
         return iteration_info
 

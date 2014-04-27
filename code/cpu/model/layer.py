@@ -2,6 +2,7 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+
 class Layer(object):
     def params(self, *args, **kwargs):
         return []
@@ -19,10 +20,3 @@ class Layer(object):
             # assign to values in the array referenced by param
             param.ravel()[:] = values[start:end]
             start = end
-
-        # start = 0
-        # for param in self.params():
-        #     end = start + param.size
-        #     assert np.all(param == values[start:end].reshape(param.shape))
-        #     start = end
-

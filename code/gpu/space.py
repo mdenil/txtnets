@@ -25,7 +25,8 @@ class GPUSpace(Space):
         return X, cpu_space
 
     def fold(self, X):
-        return X.reshape(self.folded_shape)
+        Y = X.reshape(self.folded_shape)
+        return Y
 
     def unfold(self, X):
         return X.reshape(self.shape)
@@ -51,12 +52,26 @@ class GPUSpace(Space):
 
         X = expanded_space.fold(X)
         for axis, times in replicas.iteritems():
-            # TODO: this is kind of inefficient because stack permutes the axes twice internally
-            X = gpu.utils.stack(X, times=times, axis=expanded_space.folded_axes.index(axis))
             expanded_space = expanded_space.with_extents(**{axis: expanded_space.get_extent(axis) * times})
+
+        X = gpu.utils.broadcast(X, expanded_space.folded_shape)
         X = expanded_space.unfold(X)
 
         return X, expanded_space
+
+    # def broadcast(self, X, **replicas):
+    #     self.check_compatible_shape(X)
+    #
+    #     expanded_space = self.with_axes(replicas.keys())
+    #
+    #     X = expanded_space.fold(X)
+    #     for axis, times in replicas.iteritems():
+    #         # TODO: this is kind of inefficient because stack permutes the axes twice internally
+    #         X = gpu.utils.stack(X, times=times, axis=expanded_space.folded_axes.index(axis))
+    #         expanded_space = expanded_space.with_extents(**{axis: expanded_space.get_extent(axis) * times})
+    #     X = expanded_space.unfold(X)
+    #
+    #     return X, expanded_space
 
     def add_axes(self, X, axes_to_add):
         raise NotImplementedError
