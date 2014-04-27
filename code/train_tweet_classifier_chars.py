@@ -54,11 +54,6 @@ from cpu.optimize.grad_check import ModelGradientChecker
 from cpu.optimize.sgd import SGD
 
 
-
-
-
-
-
 if __name__ == "__main__":
     random.seed(435)
     np.random.seed(2342)
@@ -83,15 +78,6 @@ if __name__ == "__main__":
     #     alphabet = json.loads(alphabet_file.read())
 
 
-    # import string
-    # alphabet = dict((k, v) for k,v in alphabet.iteritems() if set(k) < set(string.ascii_letters + string.digits))
-    # alphabet = dict((k,i) for i,k in enumerate(alphabet.keys()))
-    #
-    # from pprint import pprint
-    # pprint(alphabet)
-    # exit(0)
-
-    #
     tweets_dir = os.path.join("../data", "sentiment140")
 
     # with open(os.path.join(tweets_dir, "sentiment140.train.json")) as data_file:
@@ -101,13 +87,6 @@ if __name__ == "__main__":
         X, Y = map(list, zip(*data))
         Y = [[":)", ":("].index(y) for y in Y]
 
-        # X = X[:5000]
-        # Y = Y[:5000]
-
-    # with open(os.path.join(tweets_dir, "sentiment140.test.clean.json")) as data_file:
-    #     data = json.loads(data_file.read())
-    #     X_test, Y_test = map(list, zip(*data))
-    #     Y_test = [[":)", ":("].index(y) for y in Y_test]
 
     # with open(os.path.join(tweets_dir, "sentiment140.train.alphabet.encoding.json")) as alphabet_file:
     with open(os.path.join(tweets_dir, "sentiment140.train.clean.dictionary.encoding.json")) as alphabet_file:
@@ -127,11 +106,6 @@ if __name__ == "__main__":
         new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
     X = new_X
 
-    # new_X = []
-    # for x in X_test:
-    #     new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
-    # X_test = new_X
-
 
 
     train_data_provider = LabelledSequenceMinibatchProvider(
@@ -150,95 +124,87 @@ if __name__ == "__main__":
         padding='PADDING')
 
 
-    # n_validation = len(Y_test)
-    # validation_data_provider = LabelledSequenceMinibatchProvider(
-    #     X=X_test,
-    #     Y=Y_test,
-    #     batch_size=n_validation,
-    #     padding='PADDING')
-
-
     # ~70% after 300 batches of 100, regularizer L2=1e-4 on tweets100k
-    #
-    tweet_model = CSM(
-        layers=[
-            DictionaryEncoding(vocabulary=alphabet),
-
-            WordEmbedding( # really a character embedding
-                           dimension=32,
-                           vocabulary_size=len(alphabet)),
-
-            SentenceConvolution(
-                n_feature_maps=5,
-                kernel_width=10,
-                n_channels=1,
-                n_input_dimensions=32),
-
-            SumFolding(),
-
-            KMaxPooling(k=7),
-
-            Bias(
-                n_input_dims=16,
-                n_feature_maps=5),
-
-            Tanh(),
-
-            MaxFolding(),
-
-            Softmax(
-                n_classes=2,
-                n_input_dimensions=280),
-            ]
-    )
-
-    # Approximately Nal's model
     #
     # tweet_model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=alphabet),
     #
-    #         WordEmbedding(
-    #             dimension=12,
-    #             vocabulary_size=len(alphabet)),
+    #         WordEmbedding( # really a character embedding
+    #                        dimension=32,
+    #                        vocabulary_size=len(alphabet)),
     #
     #         SentenceConvolution(
-    #             n_feature_maps=6,
-    #             kernel_width=7,
+    #             n_feature_maps=5,
+    #             kernel_width=10,
     #             n_channels=1,
-    #             n_input_dimensions=12),
-    #
-    #         Bias(
-    #             n_input_dims=12,
-    #             n_feature_maps=6),
+    #             n_input_dimensions=32),
     #
     #         SumFolding(),
     #
-    #         KMaxPooling(k=4, k_dynamic=0.5),
-    #
-    #         Tanh(),
-    #
-    #         SentenceConvolution(
-    #             n_feature_maps=14,
-    #             kernel_width=5,
-    #             n_channels=6,
-    #             n_input_dimensions=6),
+    #         KMaxPooling(k=7),
     #
     #         Bias(
-    #             n_input_dims=6,
-    #             n_feature_maps=14),
-    #
-    #         SumFolding(),
-    #
-    #         KMaxPooling(k=4),
+    #             n_input_dims=16,
+    #             n_feature_maps=5),
     #
     #         Tanh(),
+    #
+    #         MaxFolding(),
     #
     #         Softmax(
     #             n_classes=2,
-    #             n_input_dimensions=168),
+    #             n_input_dimensions=280),
     #         ]
     # )
+
+    # Approximately Nal's model
+    #
+    tweet_model = CSM(
+        layers=[
+            DictionaryEncoding(vocabulary=alphabet),
+
+            WordEmbedding(
+                dimension=12,
+                vocabulary_size=len(alphabet)),
+
+            SentenceConvolution(
+                n_feature_maps=6,
+                kernel_width=7,
+                n_channels=1,
+                n_input_dimensions=12),
+
+            Bias(
+                n_input_dims=12,
+                n_feature_maps=6),
+
+            SumFolding(),
+
+            KMaxPooling(k=4, k_dynamic=0.5),
+
+            Tanh(),
+
+            SentenceConvolution(
+                n_feature_maps=14,
+                kernel_width=5,
+                n_channels=6,
+                n_input_dimensions=6),
+
+            Bias(
+                n_input_dims=6,
+                n_feature_maps=14),
+
+            SumFolding(),
+
+            KMaxPooling(k=4),
+
+            Tanh(),
+
+            Softmax(
+                n_classes=2,
+                n_input_dimensions=168),
+            ]
+    )
 
     # tweet_model = CSM(
     #     layers=[
@@ -324,6 +290,7 @@ if __name__ == "__main__":
             Y_hat = tweet_model.fprop(X_valid, meta=meta_valid)
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
+            # This is really slow:
             #grad_check = gradient_checker.check(tweet_model)
             grad_check = "skipped"
 
