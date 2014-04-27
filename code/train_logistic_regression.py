@@ -98,10 +98,6 @@ def check_model_accuracy(model, data_provider):
 
     Y_hat = model.fprop(X, meta=meta)
 
-    # print np.argmax(Y_hat, axis=1)
-    # print np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y, axis=1))
-    #
-    # exit(0)
 
     return np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y, axis=1))
 
@@ -128,12 +124,12 @@ if __name__ == "__main__":
             break
 
 
-    X_grid, x_grid, y_grid = generate_dense_grid(X_train.min(), X_train.max())
-    grid_meta = {'lengths': np.zeros(X_grid.shape[0])}
-    Y_grid = model.fprop(X_grid, input_axes=['b', 'w'], meta=grid_meta)
-    Y_grid = np.argmax(Y_grid, axis=1).reshape(x_grid.shape)
-    plt.pcolor(x_grid, y_grid, Y_grid)
-
-    plt.scatter(X_train[:,0], X_train[:,1], s=50, c=np.argmax(Y_train, axis=1))
-
-    plt.show()
+    # X_grid, x_grid, y_grid = generate_dense_grid(X_train.min(), X_train.max())
+    # grid_meta = {'lengths': np.zeros(X_grid.shape[0])}
+    # Y_grid = model.fprop(X_grid, input_axes=['b', 'w'], meta=grid_meta)
+    # Y_grid = np.argmax(Y_grid, axis=1).reshape(x_grid.shape)
+    # plt.pcolor(x_grid, y_grid, Y_grid)
+    #
+    # plt.scatter(X_train[:,0], X_train[:,1], s=50, c=np.argmax(Y_train, axis=1))
+    #
+    # plt.show()
