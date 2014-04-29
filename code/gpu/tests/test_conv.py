@@ -39,7 +39,7 @@ class TestFFTConvolve1D(object):
         print
         print "Max abs err:", np.max(np.abs(actual.get() - expected))
 
-        assert np.allclose(actual.get(), expected, 1e-4)
+        assert np.max(np.abs(actual.get() - expected)) < 1e-5
 
     def test_fftconv1d(self):
         for n_x in [3, 10]:
