@@ -6,6 +6,7 @@ import scipy.optimize
 import unittest
 from cpu import space
 
+import cpu.model.transfer
 import cpu.model.nonlinearity
 import cpu.model.cost
 import cpu.model.model
