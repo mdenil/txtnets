@@ -55,7 +55,8 @@ class Space(object):
         # remove any size 1 axes that aren't in new_axes
         axes_to_drop = set(new_space.folded_axes) - set(_fold_axes(new_axes))
         if any(new_space.get_extent(ax) != 1 for ax in axes_to_drop):
-            raise ValueError("You cannot drop an axis with extent != 1 using transform.")
+            raise ValueError("You cannot drop an axis with extent != 1 using transform. (Tried to drop '{}' from {})"
+                             ".".format(axes_to_drop, self))
         new_space = new_space.without_axes(axes_to_drop)
         # Reshape away the axes we just dropped. All of the dropped axes have size 1 so this doesn't
         # actually change the number of elements in the space, we're just updating metadata here.
