@@ -243,9 +243,6 @@ class Linear(unittest.TestCase):
         self.X_space = space.CPUSpace.infer(self.X, ['b', 'w', 'd', 'f'])
         self.meta = {'lengths': np.random.randint(1, w, size=b), 'space_below': self.X_space}
 
-        # Using this causes test_grad_W to fail if you forget to flip delta before the convolution when computing
-        # the gradient (this is good because if you forget that you're doing it wrong).  If you don't have a mask and
-        # just backprop all ones then the test still passes without the flip (i.e. with the wrong gradient).
         self.delta_mask = np.random.uniform(size=(b, 20)) > 0.5
 
 
