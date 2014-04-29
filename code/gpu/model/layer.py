@@ -2,6 +2,9 @@ __author__ = 'mdenil'
 
 
 class Layer(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
     def params(self, *args, **kwargs):
         return []
 

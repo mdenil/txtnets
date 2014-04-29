@@ -8,6 +8,8 @@ from pycuda import cumath
 from gpu import space
 from gpu.model import layer
 
+import generic.model.transfer
+
 import gpu.conv
 
 import scikits.cuda.linalg
@@ -15,28 +17,33 @@ scikits.cuda.linalg.init()
 
 import gpu.utils
 
-class Softmax(layer.Layer):
-    def __init__(self,
-                 n_classes,
-                 n_input_dimensions):
-        self.n_classes = n_classes
-        self.n_input_dimensions = n_input_dimensions
+class Linear(generic.model.transfer.Linear, layer.Layer):
+    def __init__(self, *args, **kwargs):
+        super(Linear, self).__init__(*args, **kwargs)
+        self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
 
-        self.W = 0.1 * np.random.standard_normal(size=(self.n_input_dimensions, self.n_classes))
-        self.b = np.zeros(shape=(1, self.n_classes))
+    def _fprop(self, X):
+        Y = scikits.cuda.linalg.dot(X, self.W)
+        Y_space = space.GPUSpace.infer(Y, ['b', 'd'])
+        return Y, Y_space
+
+    def _bprop(self, delta):
+        return scikits.cuda.linalg.dot(delta, self.W, transb='T')
+
+    def _grads(self, X, delta):
+        return [scikits.cuda.linalg.dot(X, delta, transa='T')]
+
+
+class Softmax(generic.model.transfer.Softmax, layer.Layer):
+    def __init__(self, *args, **kwargs):
+        super(Softmax, self).__init__(*args, **kwargs)
 
         self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
         self.b = gpu.utils.cpu_to_gpu(self.b.astype(np.float32))
         self._b_space = space.GPUSpace.infer(self.b, ('b', 'w'))
         self._sum_vector_classes = gpu.utils.cpu_to_gpu(np.ones((self.n_classes,1), dtype=np.float32))
 
-    def fprop(self, X, meta):
-
-        X, X_space = meta['space_below'].transform(X, ('b', ('w', 'f', 'd')))
-
-        if not X.shape[1] == self.W.shape[0]:
-            raise ValueError("Cannot multiply X.shape={} ({}) with W.shape={}".format(X.shape, X_space, self.W.shape))
-
+    def _fprop(self, X, X_space):
         A = scikits.cuda.linalg.dot(X, self.W)
         B, bias_space = self._b_space.broadcast(self.b, b=X_space.get_extent('b'))
         Y = cumath.exp(A + B)
@@ -47,195 +54,79 @@ class Softmax(layer.Layer):
 
         Y /= Z
 
-        Y_space = X_space.without_axes(('w', 'f'))
-        Y_space = Y_space.with_extents(d=self.n_classes)
-        assert Y_space.is_compatible_shape(Y)
+        return Y
 
-        lengths_below = meta['lengths']
-        meta['lengths'] = np.ones_like(meta['lengths'])
-        meta['space_above'] = Y_space
+    def _bprop(self, delta, Y):
+        return scikits.cuda.linalg.dot(delta * Y * (1.0 - Y), self.W, transb='T')
 
-        fprop_state = {
-            'X_space': X_space,
-            'Y_space': Y_space,
-            'lengths_below': lengths_below.copy(),
-            'X': X,
-            'Y': Y,
-        }
-
-        return Y, meta, fprop_state
-
-    def bprop(self, delta, meta, fprop_state):
-        Y = fprop_state['Y']
-
-        assert fprop_state['Y_space'].is_compatible_shape(Y)
-
-        delta, delta_space = meta['space_above'].transform(delta, ['b', 'd'])
-
-        # out = np.dot(delta * Y * (1-Y), self.W.T)
-        out = scikits.cuda.linalg.dot(delta * Y * (1.0 - Y), self.W, transb='T')
-
-        meta['space_below'] = fprop_state['X_space']
-        meta['lengths'] = fprop_state['lengths_below']
-        return out, meta
-
-    def grads(self, delta, meta, fprop_state):
-        X = fprop_state['X']
-        Y = fprop_state['Y']
-        X_space = fprop_state['X_space']
-        X, X_space = X_space.transform(X, ('b', ('w', 'f', 'd')))
-
-        delta, delta_space = meta['space_above'].transform(delta, ('b', ('w', 'f', 'd')))
-
+    def _grads(self, delta, X, Y):
         delta *= Y * (1.0-Y)
-
-        # grad_W = np.dot(X.T, delta)
         grad_W = scikits.cuda.linalg.dot(X, delta, transa='T')
 
-        sum_vector_batch = pycuda.gpuarray.zeros((delta_space.get_extent('b'),1), dtype=np.float32)
+        sum_vector_batch = pycuda.gpuarray.zeros((delta.shape[0],1), dtype=np.float32)
         sum_vector_batch += 1.0
 
         grad_b = scikits.cuda.linalg.dot(delta, sum_vector_batch, transa='T').reshape(self.b.shape)
 
-
         return [grad_W, grad_b]
 
-    def params(self):
-        return [self.W, self.b]
 
-    def __repr__(self):
-        return "{}(W={})".format(
-            self.__class__.__name__,
-            self.W.shape)
+class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Layer):
+    def __init__(self, *args, **kwargs):
+        super(SentenceConvolution, self).__init__(*args, **kwargs)
 
-
-class SentenceConvolution(layer.Layer):
-    def __init__(self,
-                 n_feature_maps,
-                 kernel_width,
-                 n_input_dimensions,
-                 n_channels,
-                 ):
-
-        self.n_feature_maps = n_feature_maps
-        self.kernel_width = kernel_width
-        self.n_input_dimensions = n_input_dimensions
-        self.n_channels = n_channels
-
-        self.W = 0.1 * np.random.standard_normal(
-            size=(self.n_feature_maps, self.n_input_dimensions, self.n_channels, self.kernel_width))
-        self.W = self.W.astype(np.float32)
-        self.W = gpu.utils.cpu_to_gpu(self.W)
-
+        self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
         self._kernel_space = space.GPUSpace.infer(self.W, ['f', 'd', 'c', 'w'])
         self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'f', 'd', 'c'), 'w'])
 
         self._conv = gpu.conv.FFTConv1D()
 
-    def fprop(self, X, meta):
-
-        # Things go wrong if the w extent of X is smaller than the kernel width... for now just don't do that.
-        if meta['space_below'].get_extent('w') < self.kernel_width:
-            raise ValueError("SentenceConvolution does not support input with w={} extent smaller than kernel_width={}".format(
-                meta['space_below'].get_extent('w'),
-                self.kernel_width
-            ))
-
-        working_space = meta['space_below']
-        lengths = meta['lengths']
-
-        # features in the input space become channels here
-        if 'f' in working_space.folded_axes:
-            working_space = working_space.rename_axes(f='c')
-        else:
-            X, working_space = working_space.add_axes(X, 'c')
-
-        fprop_state = {
-            'input_space': working_space,
-            'X': X,
-            'lengths_below': lengths.copy()
-        }
-
-        b, d, c, w = working_space.get_extents(['b','d','c','w'])
-
-        if not self.n_channels == c:
-            raise ValueError("n_chanels={} but the data has {} channels.".format(self.n_channels, c))
-        if not self.n_input_dimensions == d:
-            raise ValueError("n_input_dimensions={} but the data has {} dimensions.".format(self.n_input_dimensions, d))
-        f = self.n_feature_maps
-
-        X, working_space = working_space.transform(X, [('b', 'f', 'd', 'c'), 'w'])
-        X, working_space = working_space.broadcast(X, f=f)
-
-        K, _ = self._kernel_space.broadcast(gpu.utils.fliplr(self.W), b=b)
-
+    def _fprop(self, X, X_space):
+        K, _ = self._kernel_space.broadcast(gpu.utils.fliplr(self.W), b=X_space.get_extent('b'))
         X = self._conv.conv(X, K)
 
-        representation_length = X.shape[1]
+        X_space = X_space.with_extents(w=X.shape[1])
 
-        # length of a wide convolution
-        lengths = lengths + self.kernel_width - 1
+        X, X_space = gpu.utils.sum_along_axis(X, X_space, 'c')
+        X, X_space = X_space.transform(X, (('b', 'd', 'f'), 'w'))
 
-        working_space = working_space.with_extents(w=representation_length)
+        return X, X_space
 
-        X, working_space = gpu.utils.sum_along_axis(X, working_space, 'c')
-        X, working_space = working_space.transform(X, (('b', 'd', 'f'), 'w'))
+    def _bprop(self, delta, delta_space):
+        K, _ = self._kernel_space.broadcast(self.W, b=delta_space.get_extent('b'))
 
-        meta['space_above'] = working_space
-        meta['lengths'] = lengths
+        delta = self._conv.conv(delta, K, mode='valid')
+        delta_space = delta_space.with_extents(w=delta.shape[1])
 
-        return X, meta, fprop_state
+        delta, delta_space = gpu.utils.sum_along_axis(delta, delta_space, 'f')
+        delta_space = delta_space.rename_axes(c='f')
 
-    def bprop(self, delta, meta, fprop_state):
-        working_space = meta['space_above']
-        lengths = meta['lengths']
-        X_space = fprop_state['input_space']
+        return delta, delta_space
 
-        delta, working_space = working_space.transform(delta, [('b','f','d','c'), 'w'], c=X_space.get_extent('c'))
-        K, _ = self._kernel_space.broadcast(self.W, b=working_space.get_extent('b'))
-
-        delta =  self._conv.conv(delta, K, mode='valid')
-        working_space = working_space.with_extents(w=delta.shape[1])
-
-        lengths = lengths - self.kernel_width + 1
-
-        delta, working_space = gpu.utils.sum_along_axis(delta, working_space, 'f')
-        working_space = working_space.rename_axes(c='f')
-
-        meta['space_below'] = working_space
-        meta['lengths'] = lengths
-
-        assert np.all(lengths == fprop_state['lengths_below'])
-
-        assert list(working_space.shape) == list(delta.shape)
-
-        return delta, meta
-
-    def grads(self, delta, meta, fprop_state):
-        delta_space = meta['space_above']
-        X = fprop_state['X']
-        X_space = fprop_state['input_space']
-
-        delta, delta_space = delta_space.transform(delta, [('b','f','d','c'), 'w'], c=X_space.get_extent('c'))
-        X, X_space = X_space.transform(X, [('b','f','d','c'), 'w'], f=delta_space.get_extent('f'))
-
+    def _grads(self, delta, delta_space, X):
         grad_W = self._conv.conv(gpu.utils.fliplr(delta), X, mode='valid')
         grad_W_space = delta_space.with_extents(w=grad_W.shape[1])
 
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, grad_W_space.folded_axes)
-
         grad_W, grad_W_space = gpu.utils.sum_along_axis(grad_W, grad_W_space, 'b')
-        # grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
-        # grad_W_space = grad_W_space.without_axes('b')
-
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b','f','d','c'), 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b', 'f', 'd', 'c'), 'w'])
 
         return [grad_W]
 
-    def params(self):
-        return [self.W]
 
-    def __repr__(self):
-        return "{}(W={})".format(
-            self.__class__.__name__,
-            self.W.shape)
+class Bias(generic.model.transfer.Bias, layer.Layer):
+    def __init__(self, *args, **kwargs):
+        super(Bias, self).__init__(*args, **kwargs)
+
+        self.b = gpu.utils.cpu_to_gpu(self.b.astype(np.float32))
+        self._b_space = space.GPUSpace.infer(self.b, ('f', 'd'))
+
+    def _fprop(self, X, X_space):
+        B, _ = self._b_space.transform(self.b, X_space.axes, w=X_space.get_extent('w'), b=X_space.get_extent('b'))
+        return X + B
+
+    # bprop is a no-op
+
+    def _grads(self, delta, delta_space):
+        delta, delta_space = gpu.utils.sum_along_axis(delta, delta_space, 'b')
+        grad_b, grad_b_space = gpu.utils.sum_along_axis(delta, delta_space, 'w')
+        return [grad_b]

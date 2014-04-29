@@ -4,6 +4,9 @@ import numpy as np
 
 
 class Layer(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
     def params(self, *args, **kwargs):
         return []
 
