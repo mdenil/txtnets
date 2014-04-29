@@ -4,8 +4,13 @@ import numpy as np
 import scipy.optimize
 
 import unittest
-from cpu import model
 from cpu import space
+
+import cpu.model.nonlinearity
+import cpu.model.cost
+import cpu.model.model
+
+model = cpu.model
 
 class Tanh(unittest.TestCase):
     def setUp(self):

@@ -4,8 +4,12 @@ import numpy as np
 import scipy.optimize
 
 import unittest
-from cpu import model
 from cpu import space
+
+import cpu.model.transfer
+import cpu.model.cost
+
+model = cpu.model
 
 class Softmax(unittest.TestCase):
     def setUp(self):

@@ -4,8 +4,11 @@ import numpy as np
 import scipy.optimize
 
 import unittest
-from cpu import model
 from cpu import space
+
+import cpu.model.embedding
+
+model = cpu.model
 
 class WordEmbedding(unittest.TestCase):
     def setUp(self):

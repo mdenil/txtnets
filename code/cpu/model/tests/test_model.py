@@ -3,11 +3,16 @@ __author__ = 'mdenil'
 import numpy as np
 import scipy.optimize
 
-from collections import OrderedDict
-
 import unittest
-from cpu import model
 from cpu import space
+
+import cpu.model.model
+import cpu.model.pooling
+import cpu.model.transfer
+import cpu.model.nonlinearity
+import cpu.model.embedding
+
+model = cpu.model
 
 class ModelBProp(unittest.TestCase):
     def setUp(self):
