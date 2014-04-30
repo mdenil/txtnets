@@ -9,6 +9,23 @@ import gpu.model.layer
 import pycuda.gpuarray
 import pycuda.compiler
 
+
+# FIXME: make this actually use the GPU, right now it just copies everything to the CPU and
+# calls the "generic" functions, which actually implement the CPU version of pooling
+class KMaxPooling(generic.model.pooling.KMaxPooling, gpu.model.layer.Layer):
+    def fprop(self, X, meta):
+        X, meta['space_below'] = meta['space_below'].to_cpu(X)
+        X, meta, fprop_state = super(KMaxPooling, self).fprop(X, meta)
+        X, meta['space_above'] = gpu.space.GPUSpace.from_cpu(X, meta['space_above'])
+        return X, meta, fprop_state
+
+    def bprop(self, delta, meta, fprop_state):
+        delta, meta['space_above'] = meta['space_above'].to_cpu(delta)
+        back, meta = super(KMaxPooling, self).bprop(delta, meta, fprop_state)
+        back, meta['space_below'] = gpu.space.GPUSpace.from_cpu(back, meta['space_below'])
+        return back, meta
+
+
 # X should be size (N, M)
 # out should be size (N/2, M)
 # start this kernel with a 2d group of threads of shape (N/2, M)

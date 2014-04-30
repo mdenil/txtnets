@@ -11,6 +11,7 @@ import cpu.model.cost
 
 model = cpu.model
 
+
 class KMaxPooling(unittest.TestCase):
     def setUp(self):
         w,f,d,b = 10, 2, 3, 5

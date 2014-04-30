@@ -7,104 +7,10 @@ from cpu.model import layer
 
 import generic.model.pooling
 
-class KMaxPooling(layer.Layer):
-    def __init__(self, k, k_dynamic=None):
-        self.k = k
-        self.k_dynamic = k_dynamic
 
-    def fprop(self, X, meta):
-        working_space = meta['space_below']
-        lengths = meta['lengths']
-
-        # FIXME: this is a hack to guarantee statelessness
-        X = X.copy()
-
-        d, f, b, w = working_space.get_extents(['d', 'f', 'b', 'w'])
-
-        X, working_space = working_space.transform(X, [('d','f','b'), 'w'])
-
-        fprop_state = {
-            "space_below": working_space,
-            "lengths_below": lengths,
-        }
-
-        padding_mask = lengths.reshape((-1,1)) <= np.arange(working_space.get_extent('w'))
-        padding_space = space.CPUSpace.infer(padding_mask, ['b', 'w'])
-        padding_mask, padding_space = padding_space.transform(padding_mask, [('d','f','b'), 'w'], d=d, f=f)
-
-        if not self.k_dynamic:
-            # static pooling
-            index_mask = lengths.reshape((-1,1)) <= np.arange(self.k)[::-1]
-            index_space = space.CPUSpace.infer(index_mask, ['b', 'w'])
-            index_mask, index_space = index_space.transform(index_mask, [('d','f','b'), 'w'], d=d, f=f)
-            k = self.k
-            ks = self.k
-
-        else:
-            # dynamic pooling
-            ks = np.ceil(lengths * self.k_dynamic)
-            ks[ks < self.k] = np.minimum(lengths[ks < self.k], self.k)
-            max_k = np.max(ks)
-            max_k_rank = np.vstack([np.arange(max_k)[::-1]]*len(lengths))
-            index_mask = ks.reshape((-1,1)) <= max_k_rank
-            k = int(max_k)
-
-        X[padding_mask] = -np.inf
-
-        k_max_indexes = np.argsort(X, axis=1)
-        k_max_indexes = k_max_indexes[:, -k:]
-        k_max_indexes[index_mask] = np.iinfo(k_max_indexes.dtype).max
-        k_max_indexes.sort(axis=1)
-        index_mask = (k_max_indexes == np.iinfo(k_max_indexes.dtype).max)
-        k_max_indexes[index_mask] = 0
-
-        # save these for backprop
-        fprop_state['k_max_indexes'] = k_max_indexes
-        fprop_state['index_mask'] = index_mask
-        fprop_state['k'] = k
-
-        rows = np.vstack([np.arange(working_space.get_extent(('d','f','b')))] * k).T
-
-        X = X[rows, k_max_indexes]
-        X[index_mask] = 0
-
-        working_space = working_space.with_extents(w=k)
-
-        # everything has been truncated to length k or smaller
-        lengths = np.minimum(lengths, ks)
-
-        meta['space_above'] = working_space
-        meta['lengths'] = lengths
-
-        return X, meta, fprop_state
-
-    def bprop(self, delta, meta, fprop_state):
-
-        space_below = fprop_state['space_below']
-        space_above = meta['space_above']
-
-        # mask for the values to keep from delta
-        index_mask = np.logical_not(fprop_state['index_mask'])
-        k_max_indexes = fprop_state['k_max_indexes']
-
-        delta, working_space = space_above.transform(delta, [('d','f','b'), 'w'])
-
-        rows = np.vstack([np.arange(space_below.get_extent(('d','f','b')))] * fprop_state['k']).T
-        back = np.zeros(space_below.shape)
-        back, _ = space_below.transform(back, [('d','f','b'), 'w'])
-
-        back[rows[index_mask], k_max_indexes[index_mask]] = delta[index_mask]
-
-        meta['space_below'] = working_space.with_extents(w=space_below.get_extent('w'))
-        meta['lengths'] = fprop_state['lengths_below']
-
-        return back, meta
-
-    def __repr__(self):
-        return "{}(k={}, k_dynamic={})".format(
-            self.__class__.__name__,
-            self.k,
-            self.k_dynamic)
+# FIXME: move the CPU specific parts of KMaxPooling here
+class KMaxPooling(generic.model.pooling.KMaxPooling, layer.Layer):
+    pass
 
 
 class SumFolding(generic.model.pooling.SumFolding, layer.Layer):
