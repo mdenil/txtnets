@@ -4,6 +4,7 @@ import numpy as np
 import scipy.optimize
 import pyprind
 import os
+import time
 import gzip
 import random
 import simplejson as json
@@ -279,6 +280,8 @@ if __name__ == "__main__":
     n_epochs = 1
     n_batches = train_data_provider.batches_per_epoch * n_epochs
 
+    time_start = time.time()
+
     costs = []
     prev_weights = tweet_model.pack()
     for batch_index, iteration_info in enumerate(optimizer):
@@ -303,7 +306,13 @@ if __name__ == "__main__":
                 np.mean(np.abs(tweet_model.pack())),
                 grad_check)
 
+        if batch_index == 100:
+            break
 
         if batch_index % 100 == 0:
             with open("model.pkl", 'w') as model_file:
                 pickle.dump(tweet_model, model_file, protocol=-1)
+
+    time_end = time.time()
+
+    print "Time elapsed: {}s".format(time_end - time_start)

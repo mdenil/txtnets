@@ -25,7 +25,6 @@ class CrossEntropy(object):
 
         out = - pycuda.gpuarray.sum(Y_true * cumath.log(Y)) / meta['space_below'].get_extent('b')
 
-
         fprop_state = {}
         fprop_state['input_space'] = meta['space_below']
 
@@ -37,7 +36,6 @@ class CrossEntropy(object):
         if not Y.shape == Y_true.shape:
             raise ValueError("Shape of predictions and labels do not match. (Y={}, Y_true={})".format(Y.shape, Y_true.shape))
 
-        # delta = - Y_true / np.maximum(Y, self._stabilizer) + (1-Y_true) / np.maximum(1-Y, self._stabilizer)
         delta = - Y_true / (Y + self._stabilizer) + (1.0 - Y_true) / (1.0 - Y + self._stabilizer)
 
         delta *= 1.0 / Y_true.shape[0]

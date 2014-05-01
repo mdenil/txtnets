@@ -11,7 +11,7 @@ import gpu.utils
 
 from gpu import space
 
-from cpu.model.model import CSM
+from gpu.model.model import CSM
 
 
 from gpu.model.transport import GPUToCPU
@@ -27,8 +27,8 @@ from gpu.optimize.data_provider import BatchDataProvider
 # from cpu.optimize.update_rule import AdaGradUpdateRule
 # from cpu.optimize.data_provider import BatchDataProvider
 
-from cpu.optimize.objective import CostMinimizationObjective
-from cpu.optimize.sgd import SGD
+from gpu.optimize.objective import CostMinimizationObjective
+from gpu.optimize.sgd import SGD
 
 
 # from cpu.optimize.grad_check import fast_gradient_check

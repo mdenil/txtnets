@@ -53,6 +53,8 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
     def __init__(self, *args, **kwargs):
         super(WordEmbedding, self).__init__(*args, **kwargs)
 
+        self.E = gpu.utils.cpu_to_gpu(self.E.astype(np.float32))
+
         self._fprop_kernel = _embedding_module.get_function("fprop_kernel")
         self._bprop_kernel = _embedding_module.get_function("bprop_kernel")
         self._grads_kernel = _embedding_module.get_function("grads_kernel")

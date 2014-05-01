@@ -129,4 +129,5 @@ class Bias(generic.model.transfer.Bias, layer.Layer):
     def _grads(self, delta, delta_space):
         delta, delta_space = gpu.utils.sum_along_axis(delta, delta_space, 'b')
         grad_b, grad_b_space = gpu.utils.sum_along_axis(delta, delta_space, 'w')
+        grad_b, grad_b_space = grad_b_space.transform(grad_b, self._b_space.axes)
         return [grad_b]

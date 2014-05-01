@@ -4,7 +4,7 @@ from generic.space import Space
 from generic.space import _canonical_axes_description
 from generic.space import _fold_axes
 
-from cpu.space import CPUSpace
+import cpu.space
 
 import gpu.utils
 
@@ -21,7 +21,7 @@ class GPUSpace(Space):
 
     def to_cpu(self, X):
         X = gpu.utils.gpu_to_cpu(X)
-        cpu_space = CPUSpace(self.axes, self.extents)
+        cpu_space = cpu.space.CPUSpace(self.axes, self.extents)
         return X, cpu_space
 
     def fold(self, X):
@@ -72,6 +72,3 @@ class GPUSpace(Space):
     #     X = expanded_space.unfold(X)
     #
     #     return X, expanded_space
-
-    def add_axes(self, X, axes_to_add):
-        raise NotImplementedError
