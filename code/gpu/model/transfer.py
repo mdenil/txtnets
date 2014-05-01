@@ -5,6 +5,7 @@ import numpy as np
 import pycuda.autoinit
 from pycuda import cumath
 
+import gpu.utils
 from gpu import space
 from gpu.model import layer
 
@@ -15,12 +16,12 @@ import gpu.conv
 import scikits.cuda.linalg
 scikits.cuda.linalg.init()
 
-import gpu.utils
 
 class Linear(generic.model.transfer.Linear, layer.Layer):
     def __init__(self, *args, **kwargs):
         super(Linear, self).__init__(*args, **kwargs)
         self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
+        # self.__acquire_device_resources()
 
     def _fprop(self, X):
         Y = scikits.cuda.linalg.dot(X, self.W)
@@ -60,10 +61,11 @@ class Softmax(generic.model.transfer.Softmax, layer.Layer):
         return scikits.cuda.linalg.dot(delta * Y * (1.0 - Y), self.W, transb='T')
 
     def _grads(self, delta, X, Y):
-        delta *= Y * (1.0-Y)
+        delta *= Y * (1.0 - Y)
         grad_W = scikits.cuda.linalg.dot(X, delta, transa='T')
 
-        sum_vector_batch = pycuda.gpuarray.zeros((delta.shape[0],1), dtype=np.float32)
+        # FIXME: gpu.utils.sum_along_axis
+        sum_vector_batch = pycuda.gpuarray.zeros((delta.shape[0], 1), dtype=np.float32)
         sum_vector_batch += 1.0
 
         grad_b = scikits.cuda.linalg.dot(delta, sum_vector_batch, transa='T').reshape(self.b.shape)

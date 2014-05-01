@@ -2,9 +2,11 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+import gpu.utils
 import gpu.model.layer
 import generic.model.embedding
 
+import pycuda.autoinit
 import pycuda.compiler
 
 _embedding_module = pycuda.compiler.SourceModule("""
@@ -52,12 +54,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
 
     def __init__(self, *args, **kwargs):
         super(WordEmbedding, self).__init__(*args, **kwargs)
-
-        self.E = gpu.utils.cpu_to_gpu(self.E.astype(np.float32))
-
-        self._fprop_kernel = _embedding_module.get_function("fprop_kernel")
-        self._bprop_kernel = _embedding_module.get_function("bprop_kernel")
-        self._grads_kernel = _embedding_module.get_function("grads_kernel")
+        self.__acquire_device_kernels()
 
     def _fprop(self, X):
         out = pycuda.gpuarray.empty((X.size, self.E.shape[1]), dtype=np.float32)
@@ -111,3 +108,19 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
             grid=(num_blocks, 1))
 
         return [grad_E]
+
+    def __acquire_device_kernels(self):
+        self._fprop_kernel = _embedding_module.get_function("fprop_kernel")
+        self._bprop_kernel = _embedding_module.get_function("bprop_kernel")
+        self._grads_kernel = _embedding_module.get_function("grads_kernel")
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_fprop_kernel']
+        del state['_bprop_kernel']
+        del state['_grads_kernel']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__acquire_device_kernels()

@@ -49,8 +49,9 @@ __global__ void fprop_kernel(float* X, int N, int M, float* out)
 class SumFolding(generic.model.pooling.SumFolding, gpu.model.layer.Layer):
     block_size = 256
 
-    def __init__(self):
-        self._fprop_kernel = _sum_folding_module.get_function("fprop_kernel")
+    def __init__(self, *args, **kwargs):
+        super(SumFolding, self).__init__(*args, **kwargs)
+        self.__acquire_device_kernels()
 
     def _fprop(self, X):
         out = pycuda.gpuarray.empty((X.shape[0]//2, X.shape[1]), dtype=np.float32)
@@ -80,8 +81,21 @@ class SumFolding(generic.model.pooling.SumFolding, gpu.model.layer.Layer):
 
         return out
 
+
     # bprop is completely generic
     # there are no grads
+
+    def __acquire_device_kernels(self):
+        self._fprop_kernel = _sum_folding_module.get_function("fprop_kernel")
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_fprop_kernel']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__acquire_device_kernels()
 
 
 # X should be size (N, M)
@@ -111,8 +125,9 @@ __global__ void fprop_kernel(float* X, int N, int M, float* out, float* switches
 class MaxFolding(generic.model.pooling.MaxFolding, gpu.model.layer.Layer):
     block_size = 256
 
-    def __init__(self):
-        self._fprop_kernel = _max_folding_module.get_function("fprop_kernel")
+    def __init__(self, *args, **kwargs):
+        super(MaxFolding, self).__init__(*args, **kwargs)
+        self.__acquire_device_kernels()
 
     def _fprop(self, X):
         out = pycuda.gpuarray.empty((X.shape[0] // 2, X.shape[1]), dtype=np.float32)
@@ -146,3 +161,15 @@ class MaxFolding(generic.model.pooling.MaxFolding, gpu.model.layer.Layer):
 
     # bprop is entirely generic
     # no grads
+
+    def __acquire_device_kernels(self):
+        self._fprop_kernel = _max_folding_module.get_function("fprop_kernel")
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_fprop_kernel']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__acquire_device_kernels()

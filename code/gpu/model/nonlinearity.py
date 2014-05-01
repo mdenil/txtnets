@@ -33,9 +33,9 @@ __global__ void bprop_kernel(float* delta, float* Y, float* out, int N)
 class ElementwiseNonlinearity(gpu.model.layer.Layer):
     block_size = 256
 
-    def __init__(self):
-        self._fprop_kernel = self._kernel_module.get_function("fprop_kernel")
-        self._bprop_kernel = self._kernel_module.get_function("bprop_kernel")
+    def __init__(self, *args, **kwargs):
+        super(ElementwiseNonlinearity, self).__init__(*args, **kwargs)
+        self.__acquire_device_kernels()
 
     def _fprop(self, X):
         # overwrites X
@@ -59,6 +59,20 @@ class ElementwiseNonlinearity(gpu.model.layer.Layer):
             grid=(delta.size / self.__class__.block_size + 1, 1))
 
         return delta
+
+    def __acquire_device_kernels(self):
+        self._fprop_kernel = self.__class__._kernel_module.get_function("fprop_kernel")
+        self._bprop_kernel = self.__class__._kernel_module.get_function("bprop_kernel")
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_fprop_kernel']
+        del state['_bprop_kernel']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__acquire_device_kernels()
 
 
 class Relu(generic.model.nonlinearity.Relu, ElementwiseNonlinearity):
