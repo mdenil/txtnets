@@ -20,12 +20,17 @@ from gpu.model.pooling import KMaxPooling
 from gpu.model.nonlinearity import Tanh
 from gpu.model.transfer import Softmax
 
+# It might be nice to keep the word embedding dictionaries on the host, they're kind of big
+from gpu.model.transport import HostToDevice
+import cpu.model.encoding
+import cpu.model.embedding
+
 from gpu.model.cost import CrossEntropy
 
 from gpu.optimize.sgd import SGD
 from gpu.optimize.objective import CostMinimizationObjective
 from gpu.optimize.regularizer import L2Regularizer
-from gpu.optimize.update_rule import AdaGradUpdateRule
+from gpu.optimize.update_rule import AdaGrad
 from gpu.optimize.data_provider import LabelledSequenceMinibatchProvider
 
 from cpu.optimize.grad_check import ModelGradientChecker
@@ -78,37 +83,37 @@ def run():
         padding='PADDING')
 
 
-    tweet_model = CSM(
-        layers=[
-            DictionaryEncoding(vocabulary=alphabet),
-
-            WordEmbedding(
-                dimension=32,
-                vocabulary_size=len(alphabet)),
-
-            SentenceConvolution(
-                n_feature_maps=5,
-                kernel_width=10,
-                n_channels=1,
-                n_input_dimensions=32),
-
-            SumFolding(),
-
-            KMaxPooling(k=7),
-
-            Bias(
-                n_input_dims=16,
-                n_feature_maps=5),
-
-            Tanh(),
-
-            SumFolding(),
-
-            Softmax(
-                n_classes=2,
-                n_input_dimensions=280),
-            ]
-        )
+    # tweet_model = CSM(
+    #     layers=[
+    #         DictionaryEncoding(vocabulary=alphabet),
+    #
+    #         WordEmbedding(
+    #             dimension=32,
+    #             vocabulary_size=len(alphabet)),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=5,
+    #             kernel_width=10,
+    #             n_channels=1,
+    #             n_input_dimensions=32),
+    #
+    #         SumFolding(),
+    #
+    #         KMaxPooling(k=7),
+    #
+    #         Bias(
+    #             n_input_dims=16,
+    #             n_feature_maps=5),
+    #
+    #         Tanh(),
+    #
+    #         SumFolding(),
+    #
+    #         Softmax(
+    #             n_classes=2,
+    #             n_input_dimensions=280),
+    #         ]
+    #     )
 
     # Approximately Nal's model
     #
@@ -158,6 +163,56 @@ def run():
     #         ]
     # )
 
+    tweet_model = CSM(
+        layers=[
+            # cpu.model.encoding.
+            DictionaryEncoding(vocabulary=alphabet),
+
+            # cpu.model.embedding.
+            WordEmbedding(
+                dimension=28,
+                vocabulary_size=len(alphabet)),
+
+            # HostToDevice(),
+
+            SentenceConvolution(
+                n_feature_maps=6,
+                kernel_width=7,
+                n_channels=1,
+                n_input_dimensions=28),
+
+            Bias(
+                n_input_dims=28,
+                n_feature_maps=6),
+
+            SumFolding(),
+
+            KMaxPooling(k=4, k_dynamic=0.5),
+
+            Tanh(),
+
+            SentenceConvolution(
+                n_feature_maps=14,
+                kernel_width=5,
+                n_channels=6,
+                n_input_dimensions=14),
+
+            Bias(
+                n_input_dims=14,
+                n_feature_maps=14),
+
+            SumFolding(),
+
+            KMaxPooling(k=4),
+
+            Tanh(),
+
+            Softmax(
+                n_classes=2,
+                n_input_dimensions=392),
+            ]
+    )
+
     print tweet_model
 
     cost_function = CrossEntropy()
@@ -169,7 +224,7 @@ def run():
         data_provider=train_data_provider,
         regularizer=regularizer)
 
-    update_rule = AdaGradUpdateRule(
+    update_rule = AdaGrad(
         gamma=0.05,
         model_template=tweet_model)
 
@@ -190,15 +245,12 @@ def run():
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        if batch_index % 1 == 0:
+        if batch_index % 10 == 0:
             X_valid, Y_valid, meta_valid = validation_data_provider.next_batch()
 
             Y_hat = tweet_model.fprop(X_valid, meta=meta_valid)
 
-            print Y_hat.dtype
-
             Y_hat = Y_hat.get()
-            print np.abs(Y_hat.sum(axis=1) - 1)
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
             # grad_check = gradient_checker.check(tweet_model)
@@ -213,12 +265,15 @@ def run():
                 np.mean(np.abs(tweet_model.pack())),
                 grad_check)
 
-        if batch_index == 100:
-            break
+        # if batch_index == 100:
+        #     break
+        #
+        if batch_index % 1000 == 0 and batch_index > 0:
+            with open("model_optimization.pkl", 'w') as model_file:
+                pickle.dump(optimizer, model_file, protocol=-1)
 
-        # if batch_index % 100 == 0:
-        #     with open("model.pkl", 'w') as model_file:
-        #         pickle.dump(tweet_model, model_file, protocol=-1)
+        if batch_index == 30000:
+            break
 
     time_end = time.time()
 
