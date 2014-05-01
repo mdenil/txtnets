@@ -14,7 +14,9 @@ class Layer(object):
 
     def pack(self):
         # TODO: everything on the device
-        return np.concatenate([p.get().ravel() for p in self.params()])
+        def _get(x):
+            return x if isinstance(x, np.ndarray) else x.get()
+        return np.concatenate([_get(p).ravel() for p in self.params()])
 
     def unpack(self, values):
         # TODO: everything on the device

@@ -54,6 +54,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
 
     def __init__(self, *args, **kwargs):
         super(WordEmbedding, self).__init__(*args, **kwargs)
+        self.E = gpu.utils.cpu_to_gpu(self.E.astype(np.float32))
         self.__acquire_device_kernels()
 
     def _fprop(self, X):

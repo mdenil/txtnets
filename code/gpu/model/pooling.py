@@ -58,8 +58,7 @@ class SumFolding(generic.model.pooling.SumFolding, gpu.model.layer.Layer):
 
         # TODO: clean up this calculation
         if X.shape[1] > self.__class__.block_size:
-            # don't need to add one because this will never be zero on this path
-            blocks_per_row = X.shape[1] // self.__class__.block_size
+            blocks_per_row = X.shape[1] // self.__class__.block_size + 1
 
             block = (1, self.__class__.block_size, 1)
             grid = (X.shape[0], blocks_per_row)
@@ -135,8 +134,7 @@ class MaxFolding(generic.model.pooling.MaxFolding, gpu.model.layer.Layer):
 
         # TODO: clean up this calculation
         if X.shape[1] > self.__class__.block_size:
-            # don't need to add one because this will never be zero on this path
-            blocks_per_row = X.shape[1] // self.__class__.block_size
+            blocks_per_row = X.shape[1] // self.__class__.block_size + 1
 
             block = (1, self.__class__.block_size, 1)
             grid = (X.shape[0], blocks_per_row)
