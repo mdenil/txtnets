@@ -100,9 +100,10 @@ __global__ void broadcast_kernel(
     float* source, int *source_shape, int* source_stride, int rank, float *dest, int *dest_shape, int *dest_stride,
     int dest_size)
 {
-    const int dest_index = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (dest_index < dest_size) {
+    // grid strided kernel
+    for (int dest_index = blockIdx.x * blockDim.x + threadIdx.x;
+        dest_index < dest_size;
+        dest_index += blockDim.x * gridDim.x) {
 
         // figure out where the source element lives
         int source_index = 0;
@@ -121,7 +122,7 @@ __global__ void broadcast_kernel(
 """)
 _broadcast_kernel = _broadcast_module.get_function("broadcast_kernel")
 
-def broadcast(x, expanded_shape, out=None, block_size=256):
+def broadcast(x, expanded_shape, out=None, block_size=512):
     assert len(x.shape) == len(expanded_shape)
 
     rank = len(expanded_shape)
@@ -148,6 +149,8 @@ def broadcast(x, expanded_shape, out=None, block_size=256):
 
     global _broadcast_kernel
 
+    max_grid_size = 65535
+
     _broadcast_kernel(
         x,
         x_shape,
@@ -158,7 +161,7 @@ def broadcast(x, expanded_shape, out=None, block_size=256):
         y_stride,
         np.int32(y.size),
         block=(block_size, 1, 1),
-        grid=(y.size / block_size + 1, 1))
+        grid=(min(y.size // block_size + 1, max_grid_size), 1))
 
     return y
 
