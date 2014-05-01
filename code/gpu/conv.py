@@ -11,8 +11,8 @@ import numpy as np
 
 
 class FFTConv1D(object):
-    def __init__(self, use_cache=True):
-        self.use_cache = use_cache
+    def __init__(self, use_buffer_cache=True):
+        self.use_buffer_cache = use_buffer_cache
 
         self._buffer_cache = {}
         self._plan_cache = {}
@@ -97,8 +97,7 @@ class FFTConv1D(object):
             plan = self._plan_cache[key]
         except KeyError:
             plan = scikits.cuda.fft.Plan((shape[1],), from_dtype, to_dtype, shape[0])
-            if self.use_cache:
-                self._plan_cache[key] = plan
+            self._plan_cache[key] = plan
 
         return plan
 
@@ -119,7 +118,7 @@ class FFTConv1D(object):
             buf = self._buffer_cache[key]
         except KeyError:
             buf = pycuda.gpuarray.zeros(shape, dtype=dtype)
-            if self.use_cache:
+            if self.use_buffer_cache:
                 self._buffer_cache[key] = buf
 
         return buf
