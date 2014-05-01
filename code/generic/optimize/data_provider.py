@@ -65,3 +65,9 @@ class LabelledSequenceMinibatchProvider(object):
             return x + [self.padding] * (max_length - len(x))
         else:
             return x[:max_length]
+
+
+class LabelledSequenceBatchProvider(LabelledSequenceMinibatchProvider):
+    def __init__(self, X, Y, padding):
+        super(LabelledSequenceBatchProvider, self).__init__(
+            X, Y, len(X), padding, shuffle=False, fixed_length=False)

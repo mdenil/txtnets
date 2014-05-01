@@ -14,8 +14,8 @@ from gpu import space
 from gpu.model.model import CSM
 
 
-from gpu.model.transport import GPUToCPU
-from gpu.model.transport import CPUToGPU
+from gpu.model.transport import DeviceToHost
+from gpu.model.transport import HostToDevice
 
 from gpu.model.cost import CrossEntropy
 from gpu.model.transfer import Softmax

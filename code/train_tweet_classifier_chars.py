@@ -42,10 +42,10 @@ from cpu.optimize.objective import NoiseContrastiveObjective
 
 from cpu.optimize.regularizer import L2Regularizer
 
-from cpu.optimize.update_rule import AdaGradUpdateRule
-from cpu.optimize.update_rule import AdaDeltaUpdateRule
-from cpu.optimize.update_rule import BasicUpdateRule
-from cpu.optimize.update_rule import NAG
+from cpu.optimize.update_rule import AdaGrad
+from cpu.optimize.update_rule import AdaDelta
+from cpu.optimize.update_rule import Basic
+from cpu.optimize.update_rule import NesterovAcceleratedGradient
 from cpu.optimize.update_rule import Momentum
 
 from cpu.optimize.data_provider import LabelledSequenceMinibatchProvider
@@ -263,7 +263,7 @@ if __name__ == "__main__":
 
     objective = CostMinimizationObjective(cost=cost_function, data_provider=train_data_provider, regularizer=regularizer)
 
-    update_rule = AdaGradUpdateRule(
+    update_rule = AdaGrad(
         gamma=0.05,
         model_template=tweet_model)
 

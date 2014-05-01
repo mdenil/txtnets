@@ -25,8 +25,7 @@ class BatchDataProvider(object):
         return self.X, self.Y, meta
 
 
-class LabelledSequenceMinibatchProvider(
-    generic.optimize.data_provider.LabelledSequenceMinibatchProvider):
+class TransferLabelsToGPU(object):
     """
     This class doesn't actually provide GPU Xs.  It provides lists of X's on the CPU.
     It DOES describe the Xs with a GPU space though, which might be confusing.
@@ -38,7 +37,7 @@ class LabelledSequenceMinibatchProvider(
     """
 
     def next_batch(self):
-        X_batch, Y_batch, meta = super(LabelledSequenceMinibatchProvider, self).next_batch()
+        X_batch, Y_batch, meta = super(TransferLabelsToGPU, self).next_batch()
 
         meta['space_below'] = gpu.space.GPUSpace(
             meta['space_below'].axes,
@@ -47,3 +46,15 @@ class LabelledSequenceMinibatchProvider(
         Y_batch = gpu.utils.cpu_to_gpu(Y_batch.astype(np.float32))
 
         return X_batch, Y_batch, meta
+
+
+class LabelledSequenceMinibatchProvider(
+    TransferLabelsToGPU,
+    generic.optimize.data_provider.LabelledSequenceMinibatchProvider):
+    pass
+
+
+class LabelledSequenceBatchProvider(
+    TransferLabelsToGPU,
+    generic.optimize.data_provider.LabelledSequenceBatchProvider):
+    pass

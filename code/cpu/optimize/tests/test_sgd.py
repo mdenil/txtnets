@@ -42,11 +42,11 @@ class UpdateRuleSkeleton(object):
 
 class TestBasicUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return update_rule.BasicUpdateRule(learning_rate=1e-2)
+        return update_rule.Basic(learning_rate=1e-2)
 
 class TestAdaDeltaUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return update_rule.AdaDeltaUpdateRule(
+        return update_rule.AdaDelta(
             rho=0.9,
             epsilon=1e-2,
             model_template=self.model)
@@ -54,7 +54,7 @@ class TestAdaDeltaUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
 
 class TestAdaGradUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return update_rule.AdaGradUpdateRule(
+        return update_rule.AdaGrad(
             gamma=3.0,
             model_template=self.model)
 
@@ -68,7 +68,7 @@ class TestMomentumUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
 
 class TestNAGUpdateRule(UpdateRuleSkeleton, unittest.TestCase):
     def get_update_rule(self):
-        return update_rule.NAG(
+        return update_rule.NesterovAcceleratedGradient(
             momentum=0.9,
             epsilon=1e-2,
             model_template=self.model)
@@ -85,12 +85,12 @@ if __name__ == "__main__":
 
 
     update_rules = [
-        update_rule.BasicUpdateRule(learning_rate=1e-2),
-        update_rule.AdaDeltaUpdateRule(
+        update_rule.Basic(learning_rate=1e-2),
+        update_rule.AdaDelta(
             rho=0.2,
             epsilon=1e-2,
             model_template=model),
-        update_rule.AdaGradUpdateRule(
+        update_rule.AdaGrad(
             rho=0.9,
             eta=0.5,
             epsilon=1e-2,
@@ -99,7 +99,7 @@ if __name__ == "__main__":
             momentum=0.9,
             epsilon=1e-2,
             model_template=model),
-        update_rule.NAG(
+        update_rule.NesterovAcceleratedGradient(
             momentum=0.9,
             epsilon=1e-2,
             model_template=model),

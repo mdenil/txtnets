@@ -41,10 +41,10 @@ from cpu.optimize.objective import NoiseContrastiveObjective
 
 from cpu.optimize.regularizer import L2Regularizer
 
-from cpu.optimize.update_rule import AdaGradUpdateRule
-from cpu.optimize.update_rule import AdaDeltaUpdateRule
-from cpu.optimize.update_rule import BasicUpdateRule
-from cpu.optimize.update_rule import NAG
+from cpu.optimize.update_rule import AdaGrad
+from cpu.optimize.update_rule import AdaDelta
+from cpu.optimize.update_rule import Basic
+from cpu.optimize.update_rule import NesterovAcceleratedGradient
 from cpu.optimize.update_rule import Momentum
 
 from cpu.optimize.data_provider import LabelledSequenceMinibatchProvider
@@ -104,7 +104,7 @@ def optimize_and_save(model, alphabet, n_batches, data_file_name, chars_or_words
         cost=cost_function,
         data_provider=train_data_provider)
 
-    update_rule = AdaGradUpdateRule(
+    update_rule = AdaGrad(
         gamma=0.05,
         model_template=model)
 

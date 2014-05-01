@@ -24,10 +24,10 @@ from cpu.optimize.data_provider import BatchDataProvider
 
 from cpu.optimize.objective import CostMinimizationObjective
 
-from cpu.optimize.update_rule import AdaGradUpdateRule
-from cpu.optimize.update_rule import AdaDeltaUpdateRule
-from cpu.optimize.update_rule import BasicUpdateRule
-from cpu.optimize.update_rule import NAG
+from cpu.optimize.update_rule import AdaGrad
+from cpu.optimize.update_rule import AdaDelta
+from cpu.optimize.update_rule import Basic
+from cpu.optimize.update_rule import NesterovAcceleratedGradient
 from cpu.optimize.update_rule import Momentum
 
 from cpu.optimize.grad_check import fast_gradient_check
@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     objective = CostMinimizationObjective(cost=cost_function, data_provider=train_data_provider)
 
-    update_rule = AdaGradUpdateRule(
+    update_rule = AdaGrad(
         gamma=0.1,
         model_template=model)
 
