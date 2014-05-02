@@ -265,12 +265,13 @@ def run():
                 np.mean(np.abs(tweet_model.pack())),
                 grad_check)
 
-        # if batch_index == 100:
-        #     break
-        #
-        if batch_index % 1000 == 0 and batch_index > 0:
-            with open("model_optimization.pkl", 'w') as model_file:
-                pickle.dump(optimizer, model_file, protocol=-1)
+        if batch_index % 100 == 0:
+            with open("model.pkl", 'w') as model_file:
+                pickle.dump(tweet_model.move_to_cpu(), model_file, protocol=-1)
+
+        # if batch_index % 1000 == 0 and batch_index > 0:
+        #     with open("model_optimization.pkl", 'w') as model_file:
+        #         pickle.dump(optimizer, model_file, protocol=-1)
 
         if batch_index == 30000:
             break

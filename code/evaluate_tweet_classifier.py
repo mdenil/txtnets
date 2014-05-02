@@ -8,7 +8,7 @@ import simplejson as json
 import cPickle as pickle
 from nltk.tokenize import WordPunctTokenizer
 
-import gpu.optimize.data_provider
+import cpu.optimize.data_provider
 
 
 data_dir = "../data/sentiment140"
@@ -20,8 +20,9 @@ def run():
     args = parser.parse_args()
 
     with open(args.model_file) as model_file:
-        train_package = pickle.load(model_file)
-        model = train_package.model
+        model = pickle.load(model_file)
+
+    print model
 
     with open(os.path.join(data_dir, "sentiment140.test.clean.json")) as data_file:
         data = json.loads(data_file.read())
@@ -37,15 +38,15 @@ def run():
         new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
     X = new_X
 
-    data_provider = gpu.optimize.data_provider.LabelledSequenceBatchProvider(
+    data_provider = cpu.optimize.data_provider.LabelledSequenceBatchProvider(
         X=X, Y=Y, padding='PADDING')
 
     X, Y, meta = data_provider.next_batch()
 
     Y_hat = model.fprop(X, meta=meta)
 
-    Y_hat = np.argmax(Y_hat.get(), axis=1)
-    Y = np.argmax(Y.get(), axis=1)
+    Y_hat = np.argmax(Y_hat, axis=1)
+    Y = np.argmax(Y, axis=1)
 
     print "Acc: {}".format(np.mean(Y_hat == Y))
 
