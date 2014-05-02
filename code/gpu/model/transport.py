@@ -17,6 +17,12 @@ class HostToDevice(layer.Layer):
         out, meta['space_below'] = meta['space_above'].to_cpu(delta)
         return out, meta
 
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class()
+
 
 class DeviceToHost(layer.Layer):
     def fprop(self, X, meta):
@@ -27,3 +33,9 @@ class DeviceToHost(layer.Layer):
     def bprop(self, delta, meta, fprop_state):
         out, meta['space_below'] = gpu.space.GPUSpace.from_cpu(delta.astype(np.float32), meta['space_above'])
         return out, meta
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class()

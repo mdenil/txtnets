@@ -6,11 +6,15 @@ class WordEmbedding(object):
     def __init__(self,
                  dimension,
                  vocabulary_size,
-                 ):
+                 E=None):
         self.dimension = dimension
         self.vocabulary_size = vocabulary_size
 
-        self.E = 0.0025 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
+        if E is None:
+            self.E = 0.0025 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
+        else:
+            assert E.shape == (vocabulary_size, dimension)
+            self.E = E
 
     def fprop(self, X, meta):
         X, X_space = meta['space_below'].transform(X, [('b','w'), 'd'])

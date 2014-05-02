@@ -29,9 +29,7 @@ class Relu(object):
             self.__class__.__name__)
 
 
-
 class Tanh(object):
-
     def fprop(self, X, meta):
         Y = self._fprop(X)
 

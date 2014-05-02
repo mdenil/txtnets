@@ -27,6 +27,12 @@ class KMaxPooling(generic.model.pooling.KMaxPooling, gpu.model.layer.Layer):
         back, meta['space_below'] = gpu.space.GPUSpace.from_cpu(back, meta['space_below'])
         return back, meta
 
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(k=self.k, k_dynamic=self.k_dynamic)
+
 
 # X should be size (N, M)
 # out should be size (N/2, M)
@@ -95,6 +101,12 @@ class SumFolding(generic.model.pooling.SumFolding, gpu.model.layer.Layer):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.__acquire_device_kernels()
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class()
 
 
 # X should be size (N, M)
@@ -171,3 +183,9 @@ class MaxFolding(generic.model.pooling.MaxFolding, gpu.model.layer.Layer):
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.__acquire_device_kernels()
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class()

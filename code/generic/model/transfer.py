@@ -2,14 +2,22 @@ __author__ = 'mdenil'
 
 import numpy as np
 
+import cpu.space
+import collections
+
 import psutil
 
+
 class Linear(object):
-    def __init__(self, n_input, n_output):
+    def __init__(self, n_input, n_output, W=None):
         self.n_input = n_input
         self.n_output = n_output
 
-        self.W = 0.1 * np.random.standard_normal(size=(self.n_input, self.n_output))
+        if W is None:
+            self.W = 0.1 * np.random.standard_normal(size=(self.n_input, self.n_output))
+        else:
+            assert W.shape == (n_input, n_output)
+            self.W = W
 
     def fprop(self, X, meta):
 
@@ -61,12 +69,23 @@ class Linear(object):
 class Softmax(object):
     def __init__(self,
                  n_classes,
-                 n_input_dimensions):
+                 n_input_dimensions,
+                 W=None,
+                 b=None):
         self.n_classes = n_classes
         self.n_input_dimensions = n_input_dimensions
 
-        self.W = 0.1 * np.random.standard_normal(size=(self.n_input_dimensions, self.n_classes))
-        self.b = np.zeros(shape=(1, self.n_classes))
+        if W is None:
+            self.W = 0.1 * np.random.standard_normal(size=(self.n_input_dimensions, self.n_classes))
+        else:
+            assert W.shape == (self.n_input_dimensions, self.n_classes)
+            self.W = W
+
+        if b is None:
+            self.b = np.zeros(shape=(1, self.n_classes))
+        else:
+            assert b.shape == (1, self.n_classes)
+            self.b = b
 
     def fprop(self, X, meta):
 
@@ -136,7 +155,7 @@ class SentenceConvolution(object):
                  n_input_dimensions,
                  n_channels,
                  n_threads=psutil.NUM_CPUS,
-                 ):
+                 W=None):
 
         self.n_feature_maps = n_feature_maps
         self.kernel_width = kernel_width
@@ -144,8 +163,25 @@ class SentenceConvolution(object):
         self.n_channels = n_channels
         self.n_threads = n_threads
 
-        self.W = 0.1 * np.random.standard_normal(
-            size=(self.n_feature_maps, self.n_input_dimensions, self.n_channels, self.kernel_width))
+        if W is None:
+            self.W = 0.1 * np.random.standard_normal(
+                size=(n_feature_maps, n_input_dimensions, n_channels, kernel_width))
+
+            self._kernel_space = cpu.space.CPUSpace.infer(self.W, ['f', 'd', 'c', 'w'])
+            self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'f', 'd', 'c'), 'w'])
+        else:
+            # :(
+            assert W.shape == (n_feature_maps * n_input_dimensions * n_channels, kernel_width)
+            self.W = W
+            self._kernel_space = cpu.space.CPUSpace(
+                (('b', 'f', 'd', 'c'), 'w'),
+                collections.OrderedDict([
+                    ('b', 1),
+                    ('f', n_feature_maps),
+                    ('d', n_input_dimensions),
+                    ('c', n_channels),
+                    ('w', kernel_width)
+                ]))
 
     def fprop(self, X, meta):
 
@@ -230,11 +266,15 @@ class SentenceConvolution(object):
 
 
 class Bias(object):
-    def __init__(self, n_input_dims, n_feature_maps):
+    def __init__(self, n_input_dims, n_feature_maps, b=None):
         self.n_input_dims = n_input_dims
         self.n_feature_maps = n_feature_maps
 
-        self.b = np.zeros((n_feature_maps, n_input_dims))
+        if b is None:
+            self.b = np.zeros((n_feature_maps, n_input_dims))
+        else:
+            assert b.shape == (n_feature_maps, n_input_dims)
+            self.b = b
 
     def fprop(self, X, meta):
         working_space = meta['space_below']

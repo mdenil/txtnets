@@ -74,6 +74,12 @@ class ElementwiseNonlinearity(gpu.model.layer.Layer):
         self.__dict__.update(state)
         self.__acquire_device_kernels()
 
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class()
+
 
 class Relu(generic.model.nonlinearity.Relu, ElementwiseNonlinearity):
     _kernel_module = pycuda.compiler.SourceModule(

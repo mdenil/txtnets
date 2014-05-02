@@ -30,7 +30,6 @@ class CrossEntropy(object):
 
         return out, meta, fprop_state
 
-
     def bprop(self, Y, Y_true, meta, fprop_state):
 
         if not Y.shape == Y_true.shape:

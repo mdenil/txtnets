@@ -16,3 +16,9 @@ class DictionaryEncoding(generic.model.encoding.DictionaryEncoding, gpu.model.la
         X_space = gpu.space.GPUSpace.infer(X, ('b', 'w'))
 
         return X, X_space
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(vocabulary=self.vocabulary)

@@ -43,9 +43,6 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
     def __init__(self, *args, **kwargs):
         super(SentenceConvolution, self).__init__(*args, **kwargs)
 
-        self._kernel_space = space.CPUSpace.infer(self.W, ['f', 'd', 'c', 'w'])
-        self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'f', 'd', 'c'), 'w'])
-
     def _fprop(self, X, X_space):
         K, _ = self._kernel_space.broadcast(np.fliplr(self.W), b=X_space.get_extent('b'))
         X = conv.fftconv1d(X, K, n_threads=self.n_threads)

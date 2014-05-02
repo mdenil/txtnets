@@ -21,7 +21,6 @@ class Linear(generic.model.transfer.Linear, layer.Layer):
     def __init__(self, *args, **kwargs):
         super(Linear, self).__init__(*args, **kwargs)
         self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
-        # self.__acquire_device_resources()
 
     def _fprop(self, X):
         Y = scikits.cuda.linalg.dot(X, self.W)
@@ -33,6 +32,15 @@ class Linear(generic.model.transfer.Linear, layer.Layer):
 
     def _grads(self, X, delta):
         return [scikits.cuda.linalg.dot(X, delta, transa='T')]
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(
+            n_input=self.n_input,
+            n_output=self.n_output,
+            W=gpu.utils.gpu_to_cpu(self.W))
 
 
 class Softmax(generic.model.transfer.Softmax, layer.Layer):
@@ -72,14 +80,24 @@ class Softmax(generic.model.transfer.Softmax, layer.Layer):
 
         return [grad_W, grad_b]
 
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(
+            n_classes=self.n_classes,
+            n_input_dimensions=self.n_input_dimensions,
+            W=gpu.utils.gpu_to_cpu(self.W),
+            b=gpu.utils.gpu_to_cpu(self.b))
+
 
 class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Layer):
     def __init__(self, *args, **kwargs):
         super(SentenceConvolution, self).__init__(*args, **kwargs)
 
-        self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
-        self._kernel_space = space.GPUSpace.infer(self.W, ['f', 'd', 'c', 'w'])
-        self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'f', 'd', 'c'), 'w'])
+        self.W, self._kernel_space = gpu.space.GPUSpace.from_cpu(
+            self.W.astype(np.float32),
+            self._kernel_space)
 
         self._conv = gpu.conv.FFTConv1D()
 
@@ -114,6 +132,18 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 
         return [grad_W]
 
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(
+            n_feature_maps=self.n_feature_maps,
+            kernel_width=self.kernel_width,
+            n_input_dimensions=self.n_input_dimensions,
+            n_channels=self.n_channels,
+            W=gpu.utils.gpu_to_cpu(self.W))
+
+
 
 class Bias(generic.model.transfer.Bias, layer.Layer):
     def __init__(self, *args, **kwargs):
@@ -133,3 +163,12 @@ class Bias(generic.model.transfer.Bias, layer.Layer):
         grad_b, grad_b_space = gpu.utils.sum_along_axis(delta, delta_space, 'w')
         grad_b, grad_b_space = grad_b_space.transform(grad_b, self._b_space.axes)
         return [grad_b]
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(
+            n_input_dims=self.n_input_dims,
+            n_feature_maps=self.n_feature_maps,
+            b=gpu.utils.gpu_to_cpu(self.b))

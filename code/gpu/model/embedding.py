@@ -125,3 +125,12 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.__acquire_device_kernels()
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(
+            dimension=self.dimension,
+            vocabulary_size=self.vocabulary_size,
+            E=gpu.utils.gpu_to_cpu(self.E))
