@@ -7,8 +7,14 @@ import generic.optimize.data_provider
 
 from cpu import space
 
+
 class LabelledSequenceMinibatchProvider(
     generic.optimize.data_provider.LabelledSequenceMinibatchProvider):
+    pass
+
+
+class LabelledSequenceBatchProvider(
+    generic.optimize.data_provider.LabelledSequenceBatchProvider):
     pass
 
 class MinibatchDataProvider(object):
