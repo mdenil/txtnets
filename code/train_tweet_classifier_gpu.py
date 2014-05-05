@@ -54,8 +54,8 @@ def run():
 
     print len(alphabet)
 
-    # X = X[:1000]
-    # Y = Y[:1000]
+    X = X[:1000]
+    Y = Y[:1000]
 
     # lists of words
     # replace unknowns with an unknown character
@@ -273,7 +273,7 @@ def run():
         #     with open("model_optimization.pkl", 'w') as model_file:
         #         pickle.dump(optimizer, model_file, protocol=-1)
 
-        if batch_index == 30000:
+        if batch_index == 300:
             break
 
     time_end = time.time()
