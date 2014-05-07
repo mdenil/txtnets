@@ -3,11 +3,13 @@ __author__ = 'mdenil'
 import pycuda.autoinit
 from pycuda import cumath
 
+import gpu.utils
 from gpu import space
 from gpu.model import layer
 
 import scikits.cuda.linalg
 scikits.cuda.linalg.init()
+
 
 class CrossEntropy(object):
     def __init__(self, stabilizer=1e-6):
@@ -46,3 +48,4 @@ class CrossEntropy(object):
     def __repr__(self):
         return "{}()".format(
             self.__class__.__name__)
+
