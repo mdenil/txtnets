@@ -105,6 +105,8 @@ safe_call conda_install nose
 safe_call conda_install ipython pyzmq jinja2 tornado
 safe_call conda_install nltk
 safe_call conda_install pandas
+safe_call conda_install beautiful-soup
+safe_call conda_install requests
 safe_call pip_install pyprind
 safe_call pip_install pyfftw
 safe_call pip_install --pre line_profiler
