@@ -58,3 +58,17 @@ class LabelledSequenceBatchProvider(
     TransferLabelsToGPU,
     generic.optimize.data_provider.LabelledSequenceBatchProvider):
     pass
+
+
+class SequenceMinibatchProvider(
+    generic.optimize.data_provider.SequenceMinibatchProvider):
+
+    def next_batch(self):
+        X_batch, meta = super(SequenceMinibatchProvider, self).next_batch()
+
+        # Not actually providing GPU X's, just a GPU space.  The Xs should be run through a gpu encoder.
+        meta['space_below'] = gpu.space.GPUSpace(
+            meta['space_below'].axes,
+            meta['space_below'].extents)
+
+        return X_batch, meta
