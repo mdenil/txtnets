@@ -53,6 +53,7 @@ def sum_along_axis(X, space, axis):
 cuda_api = reikna.cluda.cuda_api()
 cuda_thread = cuda_api.Thread.create()
 
+
 def transpose(X, axes):
     # The reikna Transpose algorithm doesn't understand the identity transposition
     if list(axes) == range(len(axes)):

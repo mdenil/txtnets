@@ -1,5 +1,7 @@
 __author__ = 'mdenil'
 
+import random
+import generic.model.utils
 
 class CostMinimizationObjective(object):
     """
@@ -35,6 +37,7 @@ class CostMinimizationObjective(object):
         return cost, grads
 
 
+# TODO: I think this is old dead code
 class NoiseContrastiveObjective(object):
     def __init__(self, cost, data_provider, noise_model):
 

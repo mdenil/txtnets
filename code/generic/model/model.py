@@ -1,8 +1,7 @@
 __author__ = 'mdenil'
 
-import numpy as np
-
 import itertools
+
 
 class CSM(object):
     def __init__(self,

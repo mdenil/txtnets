@@ -14,7 +14,7 @@ class GenericCompareGPUToCPUTest(object):
         Y_cpu, meta_cpu, fprop_state_cpu = self.layer_cpu.fprop(self.X_cpu, meta=dict(self.meta_cpu))
         Y_gpu, meta_gpu, fprop_state_gpu = self.layer_gpu.fprop(self.X_gpu, meta=dict(self.meta_gpu))
 
-        self.assertLess(np.max(np.abs(Y_gpu.get() - Y_cpu)), 1e-5)
+        self.assertLess(np.max(np.abs(Y_gpu.get() - Y_cpu.astype(np.float32))), 1e-5)
 
     def test_bprop(self):
         Y_cpu, meta_cpu, fprop_state_cpu = self.layer_cpu.fprop(self.X_cpu, meta=dict(self.meta_cpu))

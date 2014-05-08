@@ -107,7 +107,6 @@ class KMaxPooling(object):
             self.k_dynamic)
 
 
-
 class SumFolding(object):
     def fprop(self, X, meta):
         working_space = meta['space_below']
