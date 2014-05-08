@@ -69,7 +69,7 @@ def clean_tokens(input_file_name, output_file_name):
     with open(input_file_name) as input_file:
         for text in input_file:
             tokens = map(clean_word, text.strip().split(" "))
-            data.append(text)
+            data.append(tokens)
 
     with codecs.open(output_file_name, 'w', encoding='utf-8') as output_file:
         json.dump(data, output_file)
@@ -84,11 +84,22 @@ def build_word_dictionary(input_file_name, output_file_name):
         for tokens in json.load(input_file):
             dictionary.update(tokens)
 
-    dictionary = list(sorted(w for w in dictionary if dictionary[w] >= 5)) + ['PADDING', 'UNKNOWN']
+    dictionary = list(sorted(w for w in dictionary if dictionary[w] >= 10)) + ['PADDING', 'UNKNOWN']
 
     with codecs.open(output_file_name, 'w', encoding='utf-8') as output_file:
         json.dump(dictionary, output_file)
         output_file.write(u"\n")
+
+
+@ruffus.transform([build_word_dictionary], ruffus.suffix(".json"), ".encoding.json")
+def encode_dictionary(input_file, output_file):
+    alphabet = dict()
+    with open(input_file) as alphabet_file:
+        for index, char in enumerate(json.loads(alphabet_file.read())):
+            alphabet[char] = index
+
+    with open(output_file, 'w') as alphabet_dictionary:
+        alphabet_dictionary.write(json.dumps(alphabet))
 
 
 if __name__ == "__main__":
