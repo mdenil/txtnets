@@ -2,6 +2,7 @@ __author__ = 'mdenil'
 
 import numpy as np
 import random
+from collections import OrderedDict
 
 import generic.optimize.data_provider
 
@@ -16,6 +17,12 @@ class LabelledSequenceMinibatchProvider(
 class LabelledSequenceBatchProvider(
     generic.optimize.data_provider.LabelledSequenceBatchProvider):
     pass
+
+#
+# class SequenceMinibatchProvider(
+#     generic.optimize.data_provider.LabelledSequenceBatchProvider):
+#     pass
+
 
 class MinibatchDataProvider(object):
     def __init__(self, X, Y, lengths, batch_size):
@@ -97,11 +104,19 @@ class PaddedSequenceMinibatchProvider(object):
         lengths_batch = np.asarray(map(len, X_batch))
         max_length_batch = lengths_batch.max()
 
-        X_batch = np.vstack([np.atleast_2d(self._add_padding(x, max_length_batch)) for x in X_batch])
+        # X_batch = np.vstack([np.atleast_2d(self._add_padding(x, max_length_batch)) for x in X_batch])
+        X_batch = [self._add_padding(x, max_length_batch) for x in X_batch]
+
+        # meta = {
+        #     'lengths': lengths_batch,
+        #     'space_below': space.CPUSpace.infer(X_batch, axes=['b', 'w'])
+        # }
 
         meta = {
             'lengths': lengths_batch,
-            'space_below': space.CPUSpace.infer(X_batch, axes=['b', 'w'])
+            'space_below': space.CPUSpace(
+                axes=['b', 'w'],
+                extents=OrderedDict([('b', len(X_batch)), ('w', max_length_batch)]))
         }
 
         return X_batch, meta
