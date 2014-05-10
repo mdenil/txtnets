@@ -128,15 +128,6 @@ class SequenceMinibatchProvider(object):
             return x[:max_length]
 
 
-class ParallelProvider(object):
-    def __init__(self, *providers):
-        self.providers = providers
-
-    def next_batch(self):
-        batches = tuple(p.next_batch() for p in self.providers)
-        return batches
-
-
 class TaggedProviderCollection(object):
     def __init__(self, tagged_providers):
         self.tagged_providers = tagged_providers

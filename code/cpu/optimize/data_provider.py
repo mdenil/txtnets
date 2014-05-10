@@ -10,18 +10,18 @@ from cpu import space
 
 
 class LabelledSequenceMinibatchProvider(
-    generic.optimize.data_provider.LabelledSequenceMinibatchProvider):
+        generic.optimize.data_provider.LabelledSequenceMinibatchProvider):
     pass
 
 
 class LabelledSequenceBatchProvider(
-    generic.optimize.data_provider.LabelledSequenceBatchProvider):
+        generic.optimize.data_provider.LabelledSequenceBatchProvider):
     pass
 
-#
-# class SequenceMinibatchProvider(
-#     generic.optimize.data_provider.LabelledSequenceBatchProvider):
-#     pass
+
+class SequenceMinibatchProvider(
+        generic.optimize.data_provider.SequenceMinibatchProvider):
+    pass
 
 
 class MinibatchDataProvider(object):
@@ -120,6 +120,64 @@ class PaddedSequenceMinibatchProvider(object):
         }
 
         return X_batch, meta
+
+    def _add_padding(self, x, length):
+        return x + [self.padding] * (length - len(x))
+
+    def _prepare_for_next_batch(self):
+        self._batch_index = (self._batch_index + 1) % self.batches_per_epoch
+
+        if self._batch_index == 0 and self.shuffle:
+            self._shuffle_data()
+
+    def _shuffle_data(self):
+        random.shuffle(self.X)
+
+
+class PaddedParallelSequenceMinibatchProvider(object):
+    def __init__(self, X1, X2, batch_size, padding, shuffle=True):
+        assert len(X1) == len(X2)
+        self.X = zip(X1, X2)
+        self.batch_size = batch_size
+        self.padding = padding
+        self.shuffle = shuffle
+
+        self._batch_index = -1 # will be incremeted to 0 when next_batch is called
+        self.batches_per_epoch = len(self.X) / self.batch_size
+
+    def next_batch(self):
+        self._prepare_for_next_batch()
+
+        batch_start = self._batch_index * self.batch_size
+        batch_end = batch_start + self.batch_size
+
+        X_batch = self.X[batch_start:batch_end]
+        
+        X1_batch, X2_batch = zip(*X_batch)
+
+        lengths_batch_1 = np.asarray(map(len, X1_batch))
+        max_length_batch_1 = lengths_batch_1.max()
+        X1_batch = [self._add_padding(x, max_length_batch_1) for x in X1_batch]
+        
+        lengths_batch_2 = np.asarray(map(len, X2_batch))
+        max_length_batch_2 = lengths_batch_2.max()
+        X2_batch = [self._add_padding(x, max_length_batch_2) for x in X2_batch]
+
+        meta1 = {
+            'lengths': lengths_batch_1,
+            'space_below': space.CPUSpace(
+                axes=['b', 'w'],
+                extents=OrderedDict([('b', len(X1_batch)), ('w', max_length_batch_1)]))
+        }
+
+        meta2 = {
+            'lengths': lengths_batch_2,
+            'space_below': space.CPUSpace(
+                axes=['b', 'w'],
+                extents=OrderedDict([('b', len(X2_batch)), ('w', max_length_batch_2)]))
+        }
+
+        return X1_batch, meta1, X2_batch, meta2
 
     def _add_padding(self, x, length):
         return x + [self.padding] * (length - len(x))
