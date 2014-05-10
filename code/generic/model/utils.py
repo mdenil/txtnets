@@ -9,14 +9,16 @@ class ModelEvaluator(object):
 
     You can put the same model into multiple ModelEvaluators and states will be saved separately.
     """
-    def __init__(self, model):
+    def __init__(self, model, desired_axes=None):
         self.model = model
         self.state = None
         self.meta = None
+        self.desired_axes = desired_axes
 
-    def fprop(self, data_provider):
-        X, meta = data_provider.next_batch()
+    def fprop(self, X, meta):
         Y, self.meta, self.state = self.model.fprop(X, meta=dict(meta), return_state=True)
+        if self.desired_axes:
+            Y, self.meta['space_above'] = self.meta['space_above'].transform(Y, self.desired_axes)
         return Y
 
     def grads(self, delta):
