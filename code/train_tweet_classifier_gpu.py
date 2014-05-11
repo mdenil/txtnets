@@ -54,8 +54,8 @@ def run():
 
     print len(alphabet)
 
-    X = X[:1000]
-    Y = Y[:1000]
+    # X = X[:1000]
+    # Y = Y[:1000]
 
     # lists of words
     # replace unknowns with an unknown character
@@ -68,7 +68,7 @@ def run():
     train_data_provider = LabelledSequenceMinibatchProvider(
         X=X[:-500],
         Y=Y[:-500],
-        batch_size=100,
+        batch_size=50,
         fixed_length=50,
         padding='PADDING')
 
@@ -117,72 +117,22 @@ def run():
 
     # Approximately Nal's model
     #
-    # tweet_model = CSM(
-    #     layers=[
-    #         DictionaryEncoding(vocabulary=alphabet),
-    #
-    #         WordEmbedding(
-    #             dimension=12,
-    #             vocabulary_size=len(alphabet)),
-    #
-    #         SentenceConvolution(
-    #             n_feature_maps=6,
-    #             kernel_width=7,
-    #             n_channels=1,
-    #             n_input_dimensions=12),
-    #
-    #         Bias(
-    #             n_input_dims=12,
-    #             n_feature_maps=6),
-    #
-    #         SumFolding(),
-    #
-    #         KMaxPooling(k=4, k_dynamic=0.5),
-    #
-    #         Tanh(),
-    #
-    #         SentenceConvolution(
-    #             n_feature_maps=14,
-    #             kernel_width=5,
-    #             n_channels=6,
-    #             n_input_dimensions=6),
-    #
-    #         Bias(
-    #             n_input_dims=6,
-    #             n_feature_maps=14),
-    #
-    #         SumFolding(),
-    #
-    #         KMaxPooling(k=4),
-    #
-    #         Tanh(),
-    #
-    #         Softmax(
-    #             n_classes=2,
-    #             n_input_dimensions=168),
-    #         ]
-    # )
-
     tweet_model = CSM(
         layers=[
-            # cpu.model.encoding.
             DictionaryEncoding(vocabulary=alphabet),
 
-            # cpu.model.embedding.
             WordEmbedding(
-                dimension=28,
+                dimension=12,
                 vocabulary_size=len(alphabet)),
-
-            # HostToDevice(),
 
             SentenceConvolution(
                 n_feature_maps=6,
                 kernel_width=7,
                 n_channels=1,
-                n_input_dimensions=28),
+                n_input_dimensions=12),
 
             Bias(
-                n_input_dims=28,
+                n_input_dims=12,
                 n_feature_maps=6),
 
             SumFolding(),
@@ -195,10 +145,10 @@ def run():
                 n_feature_maps=14,
                 kernel_width=5,
                 n_channels=6,
-                n_input_dimensions=14),
+                n_input_dimensions=6),
 
             Bias(
-                n_input_dims=14,
+                n_input_dims=6,
                 n_feature_maps=14),
 
             SumFolding(),
@@ -209,9 +159,59 @@ def run():
 
             Softmax(
                 n_classes=2,
-                n_input_dimensions=392),
+                n_input_dimensions=168),
             ]
     )
+
+    # tweet_model = CSM(
+    #     layers=[
+    #         # cpu.model.encoding.
+    #         DictionaryEncoding(vocabulary=alphabet),
+    #
+    #         # cpu.model.embedding.
+    #         WordEmbedding(
+    #             dimension=28,
+    #             vocabulary_size=len(alphabet)),
+    #
+    #         # HostToDevice(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=6,
+    #             kernel_width=7,
+    #             n_channels=1,
+    #             n_input_dimensions=28),
+    #
+    #         Bias(
+    #             n_input_dims=28,
+    #             n_feature_maps=6),
+    #
+    #         SumFolding(),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.5),
+    #
+    #         Tanh(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=14,
+    #             kernel_width=5,
+    #             n_channels=6,
+    #             n_input_dimensions=14),
+    #
+    #         Bias(
+    #             n_input_dims=14,
+    #             n_feature_maps=14),
+    #
+    #         SumFolding(),
+    #
+    #         KMaxPooling(k=4),
+    #
+    #         Tanh(),
+    #
+    #         Softmax(
+    #             n_classes=2,
+    #             n_input_dimensions=392),
+    #         ]
+    # )
 
     print tweet_model
 
@@ -265,6 +265,9 @@ def run():
                 np.mean(np.abs(tweet_model.pack())),
                 grad_check)
 
+        if batch_index == 500:
+            break
+
         if batch_index % 100 == 0:
             with open("model.pkl", 'w') as model_file:
                 pickle.dump(tweet_model.move_to_cpu(), model_file, protocol=-1)
@@ -273,8 +276,6 @@ def run():
         #     with open("model_optimization.pkl", 'w') as model_file:
         #         pickle.dump(optimizer, model_file, protocol=-1)
 
-        if batch_index == 300:
-            break
 
     time_end = time.time()
 

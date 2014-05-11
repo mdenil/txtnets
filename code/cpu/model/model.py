@@ -44,3 +44,12 @@ class TaggedModelCollection(object):
         for m in self.tagged_models.itervalues():
             packed.append(m.pack())
         return np.concatenate(packed)
+
+    def unpack(self, values):
+        start = 0
+        for model in self.tagged_models.itervalues():
+            for param in model.params():
+                end = start + param.size
+                # assign to values in the array referenced by param
+                param.ravel()[:] = values[start:end]
+                start = end

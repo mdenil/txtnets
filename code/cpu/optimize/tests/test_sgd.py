@@ -16,6 +16,7 @@ class NarrowQuadraticObjective(object):
         grads = [2*np.dot(self.A, model.w)]
         return float(cost), grads
 
+
 class PointModel(object):
     def __init__(self, w):
         self.w = np.asarray(w).reshape((-1,1)).astype(np.float)

@@ -42,6 +42,7 @@ class CrossEntropy(object):
             self.__class__.__name__)
 
 
+# TODO: I think this is old and useless
 class LargeMarginCost(object):
     def __init__(self, margin):
         self.margin = margin
@@ -74,3 +75,4 @@ class LargeMarginCost(object):
         return "{}(margin={})".format(
             self.__class__.__name__,
             self.margin)
+

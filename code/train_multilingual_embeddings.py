@@ -19,6 +19,7 @@ from cpu.model.pooling import MaxFolding
 from cpu.model.pooling import KMaxPooling
 from cpu.model.nonlinearity import Tanh
 from cpu.model.transfer import Softmax
+from cpu.model.transfer import AxisReduction
 from cpu.model.model import TaggedModelCollection
 
 from cpu.optimize.objective import ContrastiveMultilingualEmbeddingObjective
@@ -28,7 +29,7 @@ from cpu.optimize.objective import CostMinimizationObjective
 from cpu.optimize.regularizer import L2Regularizer
 from cpu.optimize.update_rule import AdaGrad
 from cpu.optimize.data_provider import PaddedSequenceMinibatchProvider
-from generic.optimize.data_provider import ParallelProvider
+from cpu.optimize.data_provider import PaddedParallelSequenceMinibatchProvider
 from generic.optimize.data_provider import TaggedProviderCollection
 
 
@@ -60,20 +61,22 @@ def run():
     with open(os.path.join(data_dir, "europarl-v7.de-en.de.tokens.clean.dictionary.encoding.json")) as dictionary_file:
         german_dictionary = json.load(dictionary_file)
 
+    english_data = english_data[:10000]
+    german_data = german_data[:10000]
+
     english_data = replace_unknowns(english_data, english_dictionary, 'UNKNOWN')
     german_data = replace_unknowns(german_data, german_dictionary, 'UNKNOWN')
 
-    parallel_en_de_provider = ParallelProvider(
-        PaddedSequenceMinibatchProvider(
-            X=list(english_data),
-            batch_size=100,
-            # fixed_length=50,
-            padding='PADDING'),
-        PaddedSequenceMinibatchProvider(
-            X=list(german_data),
-            batch_size=100,
-            # fixed_length=50,
-            padding='PADDING'),
+    batch_size = 100
+
+    assert len(english_data) == len(german_data)
+    print len(english_data) / batch_size
+
+    parallel_en_de_provider = PaddedParallelSequenceMinibatchProvider(
+        X1=list(english_data),
+        X2=list(german_data),
+        batch_size=batch_size,
+        padding='PADDING',
     )
 
     multilingual_parallel_provider = TaggedProviderCollection({
@@ -83,42 +86,41 @@ def run():
     contrastive_sequence_provider = TaggedProviderCollection({
         'en': PaddedSequenceMinibatchProvider(
             X=list(english_data),
-            batch_size=100,
+            batch_size=batch_size,
             # fixed_length=50,
             padding='PADDING'),
         'de': PaddedSequenceMinibatchProvider(
             X=list(german_data),
-            batch_size=100,
+            batch_size=batch_size,
             # fixed_length=50,
             padding='PADDING'),
     })
-
 
     english_model = CSM(
         layers=[
             DictionaryEncoding(vocabulary=english_dictionary),
 
             WordEmbedding(
-                dimension=32,
+                dimension=12,
                 vocabulary_size=len(english_dictionary)),
 
-            SentenceConvolution(
-                n_feature_maps=5,
-                kernel_width=10,
-                n_channels=1,
-                n_input_dimensions=32),
+            AxisReduction(axis='w'),
 
-            SumFolding(),
-
-            KMaxPooling(k=7),
-
-            Bias(
-                n_input_dims=16,
-                n_feature_maps=5),
-
-            Tanh(),
-
-            SumFolding(),
+            # SentenceConvolution(
+            #     n_feature_maps=15,
+            #     kernel_width=10,
+            #     n_channels=1,
+            #     n_input_dimensions=12),
+            #
+            # SumFolding(),
+            #
+            # KMaxPooling(k=17),
+            #
+            # Bias(
+            #     n_input_dims=6,
+            #     n_feature_maps=15),
+            #
+            # Tanh(),
             ]
         )
 
@@ -127,26 +129,26 @@ def run():
             DictionaryEncoding(vocabulary=german_dictionary),
 
             WordEmbedding(
-                dimension=32,
+                dimension=12,
                 vocabulary_size=len(german_dictionary)),
 
-            SentenceConvolution(
-                n_feature_maps=5,
-                kernel_width=10,
-                n_channels=1,
-                n_input_dimensions=32),
+            AxisReduction(axis='w'),
 
-            SumFolding(),
-
-            KMaxPooling(k=7),
-
-            Bias(
-                n_input_dims=16,
-                n_feature_maps=5),
-
-            Tanh(),
-
-            SumFolding(),
+            # SentenceConvolution(
+            #     n_feature_maps=15,
+            #     kernel_width=10,
+            #     n_channels=1,
+            #     n_input_dimensions=12),
+            #
+            # SumFolding(),
+            #
+            # KMaxPooling(k=17),
+            #
+            # Bias(
+            #     n_input_dims=6,
+            #     n_feature_maps=15),
+            #
+            # Tanh(),
 
             ]
         )
@@ -164,7 +166,7 @@ def run():
     objective = ContrastiveMultilingualEmbeddingObjective(
         tagged_parallel_sequence_provider=multilingual_parallel_provider,
         tagged_contrastive_sequence_provider=contrastive_sequence_provider,
-        n_contrastive_samples=5,
+        n_contrastive_samples=10,
         margin=5.0)
 
     # objective = CostMinimizationObjective(
@@ -173,7 +175,7 @@ def run():
     #     regularizer=regularizer)
 
     update_rule = AdaGrad(
-        gamma=0.05,
+        gamma=0.1,
         model_template=model)
 
     optimizer = SGD(
@@ -187,7 +189,7 @@ def run():
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        print costs[-1]
+        # print costs[-1]
 
         if batch_index % 10 == 0:
             print "B: {}, C: {}, Param size: {}".format(
@@ -203,8 +205,8 @@ def run():
         #     with open("model_optimization.pkl", 'w') as model_file:
         #         pickle.dump(optimizer, model_file, protocol=-1)
 
-        if batch_index == 300:
-            break
+        # if batch_index == 300:
+        #     break
 
     time_end = time.time()
 
