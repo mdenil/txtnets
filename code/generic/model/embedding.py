@@ -17,11 +17,11 @@ class WordEmbedding(object):
             self.E = E
 
     def fprop(self, X, meta):
-        X, X_space = meta['space_below'].transform(X, [('b','w'), 'd'])
+        X, X_space = meta['space_below'].transform(X, (('b', 'w'), 'd'))
 
         Y = self._fprop(X.ravel())
-
         meta['space_above'] = X_space.with_extents(d=self.dimension)
+
         fprop_state = {
             'X_space': X_space,
             'Y_space': meta['space_above'],
@@ -41,7 +41,7 @@ class WordEmbedding(object):
         delta = self._bprop(delta, Y)
 
         delta_space = delta_space.without_axes('d')
-        delta, delta_space = delta_space.transform(delta, ['b', 'w'])
+        delta, delta_space = delta_space.transform(delta, ('b', 'w'))
 
         meta['space_below'] = delta_space
 
@@ -52,8 +52,8 @@ class WordEmbedding(object):
         X = fprop_state['X']
         X_space = fprop_state['X_space']
 
-        delta, delta_space = delta_space.transform(delta, [('b','w'), 'd'])
-        X, X_space = X_space.transform(X, [('b','w'), 'd'])
+        delta, delta_space = delta_space.transform(delta, (('b', 'w'), 'd'))
+        X, X_space = X_space.transform(X, (('b', 'w'), 'd'))
 
         return self._grads(delta, X)
 

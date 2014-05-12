@@ -12,7 +12,7 @@ class Linear(generic.model.transfer.Linear, layer.Layer):
 
     def _fprop(self, X):
         Y = np.dot(X, self.W)
-        Y_space = space.CPUSpace.infer(Y, ['b', 'd'])
+        Y_space = space.CPUSpace.infer(Y, ('b', 'd'))
         return Y, Y_space
 
     def _bprop(self, delta):
@@ -49,7 +49,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 
         X_space = X_space.with_extents(w=X.shape[1])
 
-        X, X_space = X_space.transform(X, (('b', 'd', 'f'), 'w', 'c'))
+        X, X_space = X_space.transform(X, (('d', 'b', 'f'), 'c', 'w'))
         X = X.sum(axis=X_space.axes.index('c'))
         X_space = X_space.without_axes('c')
 
@@ -76,7 +76,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 
         grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
         grad_W_space = grad_W_space.without_axes('b')
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b', 'f', 'd', 'c'), 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('d', 'b', 'f', 'c'), 'w'])
 
         return [grad_W]
 
@@ -84,18 +84,24 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 class Bias(generic.model.transfer.Bias, layer.Layer):
 
     def _fprop(self, X, X_space):
-        return X + self.b
+        return X + self.b[:, np.newaxis, :, np.newaxis]
 
     # bprop is a no-op
 
     def _grads(self, delta, delta_space):
-        delta, working_space = delta_space.transform(delta, ['f', 'd', ('b', 'w')])
-        grad_b = delta.sum(axis=2)
+        grad_b = delta_space.fold(delta)
+        grad_b_space = delta_space.folded()
+        grad_b = grad_b.sum(axis=grad_b_space.axes.index('b'))
+        grad_b_space = grad_b_space.without_axes('b')
+        grad_b = grad_b.sum(axis=grad_b_space.axes.index('w'))
+        grad_b_space = grad_b_space.without_axes('w')
+        grad_b, grad_b_space = grad_b_space.transform(grad_b, ('d', 'f'))
         return [grad_b]
 
 
 class AxisReduction(layer.Layer):
     def __init__(self, axis):
+        super(AxisReduction, self).__init__()
         self.axis = axis
 
     def fprop(self, X, meta):

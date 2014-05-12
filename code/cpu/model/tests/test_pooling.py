@@ -102,7 +102,10 @@ class SumFolding(unittest.TestCase):
         self.X_space = space.CPUSpace.infer(self.X, ['d', 'f', 'b', 'w'])
 
         self.layer = model.pooling.SumFolding()
-        self.meta = {'space_below': self.X_space, 'lengths': np.random.randint(low=1, high=w, size=b)}
+        self.meta = {
+            'space_below': self.X_space,
+            'lengths': np.random.randint(low=1, high=w, size=b)
+        }
 
 
     def test_fprop(self):

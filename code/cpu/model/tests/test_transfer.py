@@ -36,7 +36,7 @@ class Softmax(unittest.TestCase):
     def test_fprop(self):
         actual, _, _ = self.layer.fprop(self.X, meta=dict(self.meta))
 
-        X, X_space = self.X_space.transform(self.X, ('b', ('w', 'f', 'd')))
+        X, X_space = self.X_space.transform(self.X, ('b', ('d', 'f', 'w')))
 
         expected = np.exp(np.dot(X, self.layer.W) + self.layer.b)
         expected /= np.sum(expected, axis=1, keepdims=True)
@@ -120,14 +120,15 @@ class Bias(unittest.TestCase):
         # biases default to zero, lets mix it up a bit
         self.layer.b = np.random.standard_normal(size=self.layer.b.shape)
 
-        self.X = np.random.standard_normal(size=(b,w,f,d))
-        self.X_space = space.CPUSpace.infer(self.X, ['b', 'w', 'f', 'd'])
+        self.X = np.random.standard_normal(size=(b, w, f, d))
+        self.X_space = space.CPUSpace.infer(self.X, ('b', 'w', 'f', 'd'))
         self.meta = {'lengths': np.zeros(b) + w, 'space_below': self.X_space}
 
 
     def test_fprop(self):
         actual, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
-        expected = self.X + self.layer.b
+        X, _ = self.X_space.transform(self.X, ('d', 'b', 'f', 'w'))
+        expected = X + self.layer.b[:, np.newaxis, :, np.newaxis]
 
         assert np.allclose(actual, expected)
 
@@ -139,8 +140,10 @@ class Bias(unittest.TestCase):
 
         def grad(x):
             X = x.reshape(self.X.shape)
+            print self.meta['space_below'], X.shape
             Y, meta, fprop_state = self.layer.fprop(X, meta=dict(self.meta))
             delta, meta = self.layer.bprop(np.ones_like(Y), meta=dict(meta), fprop_state=fprop_state)
+            print meta['space_below'], delta.shape, self.X_space.axes
             delta, _ = meta['space_below'].transform(delta, self.X_space.axes)
 
             return delta.ravel()
@@ -220,7 +223,6 @@ class SentenceConvolution(unittest.TestCase):
             self.layer.W = W.reshape(self.layer.W.shape)
 
             Y, meta, fprop_state = self.layer.fprop(self.X.copy(), meta=dict(self.meta))
-            delta = np.ones_like(Y)
             [grad_W] = self.layer.grads(self.delta_mask, meta=dict(meta), fprop_state=fprop_state)
 
             return grad_W.ravel()

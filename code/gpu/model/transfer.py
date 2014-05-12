@@ -24,7 +24,7 @@ class Linear(generic.model.transfer.Linear, layer.Layer):
 
     def _fprop(self, X):
         Y = scikits.cuda.linalg.dot(X, self.W)
-        Y_space = space.GPUSpace.infer(Y, ['b', 'd'])
+        Y_space = space.GPUSpace.infer(Y, ('b', 'd'))
         return Y, Y_space
 
     def _bprop(self, delta):
@@ -50,7 +50,7 @@ class Softmax(generic.model.transfer.Softmax, layer.Layer):
         self.W = gpu.utils.cpu_to_gpu(self.W.astype(np.float32))
         self.b = gpu.utils.cpu_to_gpu(self.b.astype(np.float32))
         self._b_space = space.GPUSpace.infer(self.b, ('b', 'w'))
-        self._sum_vector_classes = gpu.utils.cpu_to_gpu(np.ones((self.n_classes,1), dtype=np.float32))
+        self._sum_vector_classes = gpu.utils.cpu_to_gpu(np.ones((self.n_classes, 1), dtype=np.float32))
 
     def _fprop(self, X, X_space):
         A = scikits.cuda.linalg.dot(X, self.W)
@@ -108,7 +108,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
         X_space = X_space.with_extents(w=X.shape[1])
 
         X, X_space = gpu.utils.sum_along_axis(X, X_space, 'c')
-        X, X_space = X_space.transform(X, (('b', 'd', 'f'), 'w'))
+        X, X_space = X_space.transform(X, (('d', 'b', 'f'), 'w'))
 
         return X, X_space
 
@@ -128,7 +128,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
         grad_W_space = delta_space.with_extents(w=grad_W.shape[1])
 
         grad_W, grad_W_space = gpu.utils.sum_along_axis(grad_W, grad_W_space, 'b')
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b', 'f', 'd', 'c'), 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('d', 'b', 'f', 'c'), 'w'])
 
         return [grad_W]
 
@@ -150,10 +150,14 @@ class Bias(generic.model.transfer.Bias, layer.Layer):
         super(Bias, self).__init__(*args, **kwargs)
 
         self.b = gpu.utils.cpu_to_gpu(self.b.astype(np.float32))
-        self._b_space = space.GPUSpace.infer(self.b, ('f', 'd'))
+        self._b_space = space.GPUSpace.infer(self.b, ('d', 'f'))
 
     def _fprop(self, X, X_space):
-        B, _ = self._b_space.transform(self.b, X_space.axes, w=X_space.get_extent('w'), b=X_space.get_extent('b'))
+        B, _ = self._b_space.transform(
+            self.b,
+            X_space.axes,
+            w=X_space.get_extent('w'),
+            b=X_space.get_extent('b'))
         return X + B
 
     # bprop is a no-op
