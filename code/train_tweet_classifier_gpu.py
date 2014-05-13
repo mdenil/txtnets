@@ -80,7 +80,8 @@ def run():
         Y=Y[-n_validation:],
         batch_size=n_validation,
         fixed_length=50,
-        padding='PADDING')
+        padding='PADDING',
+        shuffle=False)
 
 
     # tweet_model = CSM(
@@ -265,7 +266,7 @@ def run():
                 np.mean(np.abs(tweet_model.pack())),
                 grad_check)
 
-        if batch_index == 500:
+        if batch_index == 100:
             break
 
         if batch_index % 100 == 0:
