@@ -20,28 +20,34 @@ class WordEmbedding(object):
         X, X_space = meta['space_below'].transform(X, (('b', 'w'), 'd'))
 
         Y = self._fprop(X.ravel())
-        meta['space_above'] = X_space.with_extents(d=self.dimension)
+        Y_space = X_space.with_extents(d=self.dimension)
 
         fprop_state = {
             'X_space': X_space,
-            'Y_space': meta['space_above'],
+            'Y_space': Y_space,
             'X': X,
             'Y': Y,
         }
+
+        # This is the standard order for axes in most other layers, we transform here instead of later so that the
+        # transformation happens before any broadcasts.
+        Y, Y_space = Y_space.transform(Y, (('d', 'b'), 'w'))
+        meta['space_above'] = Y_space
 
         return Y, meta, fprop_state
 
     def bprop(self, delta, meta, fprop_state):
         Y = fprop_state['Y']
+        Y_space = fprop_state['Y_space']
 
         delta_space = meta['space_above']
 
-        delta, delta_space = delta_space.transform(delta, fprop_state['Y_space'].axes)
+        delta, delta_space = delta_space.transform(delta, (('b', 'w'), 'd'))
+        Y, Y_space = Y_space.transform(delta, (('b', 'w'), 'd'))
 
         delta = self._bprop(delta, Y)
 
         delta_space = delta_space.without_axes('d')
-        delta, delta_space = delta_space.transform(delta, ('b', 'w'))
 
         meta['space_below'] = delta_space
 

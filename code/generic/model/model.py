@@ -60,7 +60,6 @@ class CSM(object):
         else:
             return X, meta, fprop_state
 
-
     def bprop(self, delta, meta, fprop_state, return_state=False):
         layer_fprop_states = fprop_state['layer_fprop_states']
 
@@ -102,6 +101,9 @@ class CSM(object):
 
             if layer_index > 0:
                 delta, meta = layer.bprop(delta, meta=dict(meta), fprop_state=layer_fprop_state)
+
+                if 'space_below' not in meta:
+                    meta['space_below'] = meta['space_above']
 
                 if not meta['space_below'].is_compatible_shape(delta):
                     raise ValueError("Layer of type {} created delta.shape={}, which is incompatable with space_below={}".format(type(layer), delta.shape, meta['space_below']))

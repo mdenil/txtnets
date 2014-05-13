@@ -31,7 +31,7 @@ __global__ void bprop_kernel(float* delta, float* Y, float* out, int N)
 
 
 class ElementwiseNonlinearity(gpu.model.layer.Layer):
-    block_size = 256
+    block_size = 512
 
     def __init__(self, *args, **kwargs):
         super(ElementwiseNonlinearity, self).__init__(*args, **kwargs)

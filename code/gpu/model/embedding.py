@@ -50,7 +50,7 @@ __global__ void grads_kernel(float* delta, int N, int M, int* X, float* out)
 
 
 class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer):
-    block_size = 256
+    block_size = 512
 
     def __init__(self, *args, **kwargs):
         super(WordEmbedding, self).__init__(*args, **kwargs)

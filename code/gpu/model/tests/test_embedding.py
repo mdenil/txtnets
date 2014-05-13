@@ -29,7 +29,7 @@ class WordEmbedding(GenericCompareGPUToCPUTest, unittest.TestCase):
         self.layer_gpu.E = gpu.utils.cpu_to_gpu(self.layer_cpu.E.astype(np.float32))
 
         self.X_cpu = np.random.randint(vocabulary_size, size=(3, 5))
-        self.X_gpu = gpu.utils.cpu_to_gpu(self.X_cpu)
+        self.X_gpu = gpu.utils.cpu_to_gpu(self.X_cpu.astype(np.int32))
 
         self.X_cpu_space = cpu.space.CPUSpace.infer(self.X_cpu, ['b', 'w'])
         self.X_gpu_space = gpu.space.GPUSpace.infer(self.X_gpu, ['b', 'w'])

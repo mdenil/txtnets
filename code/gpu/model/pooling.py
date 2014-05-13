@@ -53,7 +53,7 @@ __global__ void fprop_kernel(float* X, int N, int M, float* out)
 
 
 class SumFolding(generic.model.pooling.SumFolding, gpu.model.layer.Layer):
-    block_size = 256
+    block_size = 512
 
     def __init__(self, *args, **kwargs):
         super(SumFolding, self).__init__(*args, **kwargs)
@@ -134,7 +134,7 @@ __global__ void fprop_kernel(float* X, int N, int M, float* out, float* switches
 
 
 class MaxFolding(generic.model.pooling.MaxFolding, gpu.model.layer.Layer):
-    block_size = 256
+    block_size = 512
 
     def __init__(self, *args, **kwargs):
         super(MaxFolding, self).__init__(*args, **kwargs)

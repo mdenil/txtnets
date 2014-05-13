@@ -35,13 +35,23 @@ class GPUSpace(Space):
         self.check_compatible_shape(X)
 
         new_axes = _canonical_axes_description(new_axes)
+        new_folded_axes = _fold_axes(new_axes)
 
-        X = self.fold(X)
-        X = gpu.utils.transpose(X, [self.folded_axes.index(axis) for axis in _fold_axes(new_axes)])
+        permutation = [self.folded_axes.index(axis) for axis in new_folded_axes]
+
+        # check if this permutation only moves length 1 axes, if so we can just shuffle metadata
         new_space = self.transposed(new_axes)
-        X = new_space.unfold(X)
 
-        new_space.check_compatible_shape(X)
+        self_real_shape = tuple(s for s in self.folded_shape if s != 1)
+        new_real_shape = tuple(s for s in new_space.folded_shape if s != 1)
+
+        if self_real_shape == new_real_shape:
+            X = new_space.unfold(X)
+        else:
+            X = self.fold(X)
+            X = gpu.utils.transpose(X, permutation)
+            new_space = self.transposed(new_axes)
+            X = new_space.unfold(X)
 
         return X, new_space
 

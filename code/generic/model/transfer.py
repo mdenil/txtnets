@@ -214,8 +214,7 @@ class SentenceConvolution(object):
             raise ValueError("n_input_dimensions={} but the data has {} dimensions.".format(self.n_input_dimensions, d))
         f = self.n_feature_maps
 
-        X, working_space = working_space.broadcast(X, f=f)
-        X, working_space = working_space.transform(X, (('d', 'b', 'f', 'c'), 'w'))
+        X, working_space = working_space.transform(X, (('d', 'b', 'f', 'c'), 'w'), f=f)
 
         X, working_space = self._fprop(X, working_space)
 

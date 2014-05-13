@@ -4,7 +4,7 @@ __author__ = 'mdenil'
 # No! Numpy is not allowed in here >:|
 # import numpy as np
 import operator
-from collections import OrderedDict
+# from collections import OrderedDict
 
 
 class Space(object):
@@ -14,9 +14,9 @@ class Space(object):
         if extents is None:
             extents = [(ax, 1) for ax in self.folded_axes]
 
-        self._extents = OrderedDict(extents)
+        self._extents = dict(extents)
 
-        if not self.folded_axes == tuple(self._extents.keys()):
+        if not set(self.folded_axes) == set(self._extents.keys()):
             raise ValueError("Cannot construct a space with axes={} and extents={}".format(self.axes, self.extents))
 
     # This interface must be implemented by subclasses.
@@ -42,18 +42,25 @@ class Space(object):
 
         return cls(axes, zip(axes, X.shape))
 
+    # @profile
     def transform(self, X, new_axes, **broadcast):
         self.check_compatible_shape(X)
 
+        if self.folded_axes == _fold_axes(new_axes):
+            new_space = self.__class__(new_axes, self.extents)
+            X = new_space.unfold(X)
+            return X, new_space
+
         new_axes = _canonical_axes_description(new_axes)
+        new_folded_axes = _fold_axes(new_axes)
 
         new_space = self
 
         # add any new axes needed
-        new_space = new_space.with_axes(_fold_axes(new_axes))
+        new_space = new_space.with_axes(new_folded_axes)
 
         # remove any size 1 axes that aren't in new_axes
-        axes_to_drop = set(new_space.folded_axes) - set(_fold_axes(new_axes))
+        axes_to_drop = set(new_space.folded_axes) - set(new_folded_axes)
         if any(new_space.get_extent(ax) != 1 for ax in axes_to_drop):
             raise ValueError("You cannot drop an axis with extent != 1 using transform. (Tried to drop '{}' from {})"
                              ".".format(axes_to_drop, self))
@@ -62,13 +69,12 @@ class Space(object):
         # actually change the number of elements in the space, we're just updating metadata here.
         X = new_space.unfold(X)
 
-        new_space.check_compatible_shape(X)
-
         # permute the axes of X to align with the new order
         X, new_space = new_space.transpose(X, new_axes)
 
-        # broadcast any of the requested axes
-        X, new_space = new_space.broadcast(X, **broadcast)
+        if len(broadcast) > 0:
+            # broadcast any of the requested axes
+            X, new_space = new_space.broadcast(X, **broadcast)
 
         return X, new_space
 
@@ -99,10 +105,11 @@ class Space(object):
             raise ValueError("Axes incompatible for transposed. self.axes={}, new_axes={}".format(
                 self.axes, new_axes))
 
-        new_extents = OrderedDict((axis, self._extents[axis]) for axis in _fold_axes(new_axes))
+        new_extents = dict((axis, self._extents[axis]) for axis in _fold_axes(new_axes))
 
         return self.__class__(new_axes, new_extents)
 
+    # @profile
     def with_axes(self, axes):
         """
         Creates a new space that includes any of the specified axes.  You can't add an unfolded axis, but you can add
@@ -151,7 +158,7 @@ class Space(object):
         if axes_to_remove != _fold_axes(axes_to_remove):
             raise ValueError("You cannot remove an unfolded axis from a space.  Remove each axis individually instead.")
 
-        contracted_extents = OrderedDict()
+        contracted_extents = dict()
         for ax in self._extents:
             if ax not in axes_to_remove:
                 contracted_extents[ax] = self._extents[ax]
@@ -210,7 +217,7 @@ class Space(object):
             if not ax in self._extents:
                 raise ValueError("You're not allowed to rename an axis that doesn't exist.  Add it first (ax={})".format(ax))
 
-        renamed_extents = OrderedDict()
+        renamed_extents = dict()
         for ax, ex in self._extents.iteritems():
             if ax in renames:
                 ax = renames[ax]
@@ -275,7 +282,7 @@ class Space(object):
 
     @property
     def extents(self):
-        return OrderedDict(self._extents)
+        return dict(self._extents)
 
     def get_extent(self, axis):
         """
@@ -307,7 +314,7 @@ class Space(object):
 
     @property
     def folded_shape(self):
-        return tuple(self._extents.values())
+        return tuple(self.get_extent(ax) for ax in _fold_axes(self._axes))
 
     def __repr__(self):
         return "{}(axes={}, extents=[{}])".format(

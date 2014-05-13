@@ -29,6 +29,7 @@ class GenericCompareGPUToCPUTest(object):
         delta_gpu, meta_gpu = self.layer_gpu.bprop(delta_gpu, meta=dict(meta_gpu), fprop_state=fprop_state_gpu)
         delta_gpu, _ = meta_gpu['space_below'].transform(delta_gpu, self.X_gpu_space.axes)
 
+        self.assertEqual(delta_gpu.shape, delta_cpu.shape)
         self.assertLess(np.max(np.abs(delta_gpu.get() - delta_cpu)), 1e-5)
 
     def test_grads(self):
@@ -45,6 +46,7 @@ class GenericCompareGPUToCPUTest(object):
         self.assertEqual(len(grads_cpu), len(grads_gpu))
 
         for g_cpu, g_gpu in zip(grads_cpu, grads_gpu):
+            self.assertEqual(g_gpu.shape, g_cpu.shape)
             self.assertLess(np.max(np.abs(g_gpu.get() - g_cpu)), 1e-5)
 
     def test_pickles(self):

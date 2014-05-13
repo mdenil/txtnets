@@ -4,7 +4,7 @@ import numpy as np
 import unittest
 
 from generic.space import *
-
+from collections import OrderedDict
 
 class TestSpace(unittest.TestCase):
 
@@ -44,9 +44,6 @@ class TestSpace(unittest.TestCase):
         self.assertEqual(space.with_axes(('c', 'd')).axes, ('a', 'b', 'c', 'd'))
 
         self.assertEqual(space.with_axes('z').extents, OrderedDict([('a', 2), ('b', 2), ('c', 3), ('z', 1)]))
-
-        for ax in ['a', 'b', 'c', 'd']:
-            self.assertEqual(tuple(space.with_axes(ax).extents.keys()), space.with_axes(ax).folded_axes)
 
         with self.assertRaises(ValueError):
             space.with_axes(('a',('b',)))

@@ -6,6 +6,7 @@ import numpy as np
 import pycuda.autoinit
 import pycuda.gpuarray
 import pycuda.compiler
+import pycuda.tools
 
 import reikna.cluda
 import reikna.algorithms
@@ -22,7 +23,6 @@ def gpu_to_cpu(X):
     return X.get()
 
 
-
 def fliplr(X):
     # TODO: properly implement this
     return cpu_to_gpu(np.fliplr(gpu_to_cpu(X)).copy())
@@ -31,12 +31,24 @@ def fliplr(X):
 def sum_along_axis(X, space, axis):
     assert axis in space.folded_axes
 
+    # short circut for summing along an axis of size 1
+    if space.get_extent(axis) == 1:
+        working_space = space.without_axes(axis)
+        return working_space.unfold(X), working_space
+
     # bring the target axis to the right
     target_axes = (tuple(ax for ax in space.folded_axes if ax != axis), axis)
     X, working_space = space.transform(X, target_axes)
 
-    summer = pycuda.gpuarray.zeros((working_space.get_extent(axis), 1), dtype=X.dtype)
-    summer += 1.0
+    key = (working_space.get_extent(axis), X.dtype)
+    try:
+        summer = sum_along_axis.cache[key]
+    except KeyError:
+        summer = pycuda.gpuarray.empty(
+            (working_space.get_extent(axis), 1),
+            dtype=X.dtype)
+        summer.fill(1.0)
+        sum_along_axis.cache[key] = summer
 
     X = scikits.cuda.linalg.dot(X, summer).ravel()
     working_space = working_space.without_axes(axis)
@@ -45,6 +57,7 @@ def sum_along_axis(X, space, axis):
 
     return X, working_space
 
+sum_along_axis.cache = {}
 
 
 
