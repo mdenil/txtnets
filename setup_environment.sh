@@ -113,6 +113,7 @@ safe_call pip_install --pre line_profiler
 safe_call pip_install ruffus
 safe_call pip_install sh
 safe_call pip_install simplejson
+safe_call pip_install seaborn
 safe_call install_cld2
 
 if [ "$1" == "--cuda" ]; then
