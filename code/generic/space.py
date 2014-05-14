@@ -46,9 +46,13 @@ class Space(object):
     def transform(self, X, new_axes, **broadcast):
         self.check_compatible_shape(X)
 
+        # short path for when there is no transposing
         if self.folded_axes == _fold_axes(new_axes):
             new_space = self.__class__(new_axes, self.extents)
             X = new_space.unfold(X)
+            if len(broadcast) > 0:
+                # broadcast any of the requested axes
+                X, new_space = new_space.broadcast(X, **broadcast)
             return X, new_space
 
         new_axes = _canonical_axes_description(new_axes)
