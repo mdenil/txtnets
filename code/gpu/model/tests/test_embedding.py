@@ -21,11 +21,13 @@ class WordEmbedding(GenericCompareGPUToCPUTest, unittest.TestCase):
 
         self.layer_cpu = cpu.model.embedding.WordEmbedding(
             dimension=d,
-            vocabulary_size=vocabulary_size)
+            vocabulary_size=vocabulary_size,
+            padding=0)
 
         self.layer_gpu = gpu.model.embedding.WordEmbedding(
             dimension=d,
-            vocabulary_size=vocabulary_size)
+            vocabulary_size=vocabulary_size,
+            padding=0)
         self.layer_gpu.E = gpu.utils.cpu_to_gpu(self.layer_cpu.E.astype(np.float32))
 
         self.X_cpu = np.random.randint(vocabulary_size, size=(3, 5))

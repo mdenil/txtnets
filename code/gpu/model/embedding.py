@@ -34,7 +34,7 @@ __global__ void bprop_kernel(float* delta, float* Y, int N, int M, float* out)
     }
 }
 
-__global__ void grads_kernel(float* delta, int N, int M, int* X, float* out)
+__global__ void grads_kernel(float* delta, int N, int M, int* X, float* out, int padding_row)
 {
     // out needs to be zeroed before this kernel is called
 
@@ -42,8 +42,10 @@ __global__ void grads_kernel(float* delta, int N, int M, int* X, float* out)
     const int col = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (row < N && col < M) {
-        // use an atomic op because multiple Xs can index the same row of out
-        atomicAdd(out + X[row] * M + col, delta[row * M + col]);
+        if (X[row] != padding_row) {
+            // use an atomic op because multiple Xs can index the same row of out
+            atomicAdd(out + X[row] * M + col, delta[row * M + col]);
+        }
     }
 }
 """)
@@ -105,6 +107,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
             np.int32(delta.shape[1]),
             X,
             grad_E,
+            np.int32(self.padding),
             block=(rows_per_block, self.E.shape[1], 1),
             grid=(num_blocks, 1))
 
@@ -133,4 +136,5 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
         return cpu_class(
             dimension=self.dimension,
             vocabulary_size=self.vocabulary_size,
+            padding=self.padding,
             E=gpu.utils.gpu_to_cpu(self.E))

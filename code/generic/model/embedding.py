@@ -6,13 +6,17 @@ class WordEmbedding(object):
     def __init__(self,
                  dimension,
                  vocabulary_size,
+                 padding,
                  E=None):
         self.dimension = dimension
+        self.padding = padding
         self.vocabulary_size = vocabulary_size
 
         if E is None:
             self.E = 0.01 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
             # self.E = 0.0025 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
+
+            self.E[padding] = 0.0
         else:
             assert E.shape == (vocabulary_size, dimension)
             self.E = E

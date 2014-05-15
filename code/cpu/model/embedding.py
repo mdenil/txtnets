@@ -22,6 +22,8 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, layer.Layer):
         for i,j in enumerate(X.ravel()):
             grad_E[j] += delta[i]
 
+        grad_E[self.padding] = 0.0
+
         return [grad_E]
 
     # def indicator_matrix(self, X, meta):

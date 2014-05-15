@@ -170,7 +170,8 @@ def run():
 
             WordEmbedding(
                 dimension=12,
-                vocabulary_size=len(alphabet)),
+                vocabulary_size=len(alphabet),
+                padding=alphabet['PADDING']),
 
             SentenceConvolution(
                 n_feature_maps=10,
@@ -311,8 +312,8 @@ def run():
                 best_acc = acc
                 with open("model_best.pkl", 'w') as model_file:
                     pickle.dump(tweet_model.move_to_cpu(), model_file, protocol=-1)
-                with open("model_best_optimization.pkl", 'w') as model_file:
-                    pickle.dump(optimizer, model_file, protocol=-1)
+                # with open("model_best_optimization.pkl", 'w') as model_file:
+                #     pickle.dump(optimizer, model_file, protocol=-1)
 
 
             print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, best acc: {}".format(

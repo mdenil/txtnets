@@ -16,9 +16,12 @@ class WordEmbedding(unittest.TestCase):
         # vocabulary size should be at least as big as the number of words to catch indexing errors
         vocabulary_size = 30
 
+        self.padding = 0
+
         self.layer = model.embedding.WordEmbedding(
             dimension=d,
-            vocabulary_size=vocabulary_size)
+            vocabulary_size=vocabulary_size,
+            padding=self.padding)
 
         self.words = np.random.randint(vocabulary_size, size=(3,5))
 
@@ -41,17 +44,23 @@ class WordEmbedding(unittest.TestCase):
     def test_grad(self):
         def func(E):
             self.layer.E = E.reshape(self.layer.E.shape)
+            # padding is always forced to be zero
+            self.layer.E[self.padding] = 0.0
+
             Y, _, _ = self.layer.fprop(self.words.copy(), meta=self.meta)
             c = Y.sum()
             return Y.sum()
 
         def grad(E):
             self.layer.E = E.reshape(self.layer.E.shape)
+            # padding is always forced to be zero
+            self.layer.E[self.padding] = 0.0
 
             Y, meta, fprop_state = self.layer.fprop(self.words.copy(), meta=self.meta)
             delta = np.ones_like(Y)
             [grad_E] = self.layer.grads(delta, meta=meta, fprop_state=fprop_state)
 
             return grad_E.ravel()
+
 
         assert scipy.optimize.check_grad(func, grad, self.layer.E.ravel()) < 1e-7

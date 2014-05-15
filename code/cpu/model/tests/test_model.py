@@ -103,7 +103,8 @@ class Model(unittest.TestCase):
             layers=[
                 model.embedding.WordEmbedding(
                     dimension=embedding_dimension,
-                    vocabulary_size=vocabulary_size),
+                    vocabulary_size=vocabulary_size,
+                    padding=0),
 
                 model.transfer.SentenceConvolution(
                     n_feature_maps=n_feature_maps,
