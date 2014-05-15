@@ -144,7 +144,6 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
             W=gpu.utils.gpu_to_cpu(self.W))
 
 
-
 class Bias(generic.model.transfer.Bias, layer.Layer):
     def __init__(self, *args, **kwargs):
         super(Bias, self).__init__(*args, **kwargs)
@@ -177,3 +176,18 @@ class Bias(generic.model.transfer.Bias, layer.Layer):
             n_input_dims=self.n_input_dims,
             n_feature_maps=self.n_feature_maps,
             b=gpu.utils.gpu_to_cpu(self.b))
+
+
+class AxisReduction(generic.model.transfer.AxisReduction, layer.Layer):
+    def _fprop(self, X, X_space):
+        X, X_space = gpu.utils.sum_along_axis(X, X_space, self.axis)
+        return X, X_space
+
+    # bprop is generic
+    # no grads
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(axis=self.axis)

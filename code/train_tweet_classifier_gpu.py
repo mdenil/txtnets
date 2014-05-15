@@ -118,6 +118,52 @@ def run():
 
     # Approximately Nal's model
     #
+    # tweet_model = CSM(
+    #     layers=[
+    #         DictionaryEncoding(vocabulary=alphabet),
+    #
+    #         WordEmbedding(
+    #             dimension=12,
+    #             vocabulary_size=len(alphabet)),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=6,
+    #             kernel_width=7,
+    #             n_channels=1,
+    #             n_input_dimensions=12),
+    #
+    #         Bias(
+    #             n_input_dims=12,
+    #             n_feature_maps=6),
+    #
+    #         SumFolding(),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.5),
+    #
+    #         Tanh(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=14,
+    #             kernel_width=5,
+    #             n_channels=6,
+    #             n_input_dimensions=6),
+    #
+    #         Bias(
+    #             n_input_dims=6,
+    #             n_feature_maps=14),
+    #
+    #         SumFolding(),
+    #
+    #         KMaxPooling(k=4),
+    #
+    #         Tanh(),
+    #
+    #         Softmax(
+    #             n_classes=2,
+    #             n_input_dimensions=168),
+    #         ]
+    # )
+
     tweet_model = CSM(
         layers=[
             DictionaryEncoding(vocabulary=alphabet),
@@ -127,14 +173,14 @@ def run():
                 vocabulary_size=len(alphabet)),
 
             SentenceConvolution(
-                n_feature_maps=6,
-                kernel_width=7,
+                n_feature_maps=10,
+                kernel_width=3,
                 n_channels=1,
                 n_input_dimensions=12),
 
             Bias(
                 n_input_dims=12,
-                n_feature_maps=6),
+                n_feature_maps=10),
 
             SumFolding(),
 
@@ -144,8 +190,8 @@ def run():
 
             SentenceConvolution(
                 n_feature_maps=14,
-                kernel_width=5,
-                n_channels=6,
+                kernel_width=3,
+                n_channels=10,
                 n_input_dimensions=6),
 
             Bias(
@@ -242,11 +288,13 @@ def run():
 
     time_start = time.time()
 
+    best_acc = -1.0
+
     costs = []
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        if batch_index % 10 == 0:
+        if batch_index % 30 == 0:
             X_valid, Y_valid, meta_valid = validation_data_provider.next_batch()
 
             Y_hat = tweet_model.fprop(X_valid, meta=meta_valid)
@@ -259,19 +307,27 @@ def run():
 
             acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid.get(), axis=1))
 
-            print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, g: {}".format(
+            if acc > best_acc:
+                best_acc = acc
+                with open("model_best.pkl", 'w') as model_file:
+                    pickle.dump(tweet_model.move_to_cpu(), model_file, protocol=-1)
+                with open("model_best_optimization.pkl", 'w') as model_file:
+                    pickle.dump(optimizer, model_file, protocol=-1)
+
+
+            print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, best acc: {}".format(
                 batch_index,
                 acc, costs[-1],
                 np.argmax(Y_hat, axis=1).mean(),
                 np.mean(np.abs(tweet_model.pack())),
-                grad_check)
+                best_acc)
 
-        if batch_index == 100:
-            break
+        # if batch_index == 100:
+        #     break
 
-        if batch_index % 100 == 0:
-            with open("model.pkl", 'w') as model_file:
-                pickle.dump(tweet_model.move_to_cpu(), model_file, protocol=-1)
+        # if batch_index % 100 == 0:
+        #     with open("model.pkl", 'w') as model_file:
+        #         pickle.dump(tweet_model.move_to_cpu(), model_file, protocol=-1)
 
         # if batch_index % 1000 == 0 and batch_index > 0:
         #     with open("model_optimization.pkl", 'w') as model_file:

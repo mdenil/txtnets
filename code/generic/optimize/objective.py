@@ -1,5 +1,6 @@
 __author__ = 'mdenil'
 
+import numpy as np
 import random
 import generic.model.utils
 
@@ -37,43 +38,91 @@ class CostMinimizationObjective(object):
         return cost, grads
 
 
-# TODO: I think this is old dead code
-class NoiseContrastiveObjective(object):
-    def __init__(self, cost, data_provider, noise_model):
+def _parallel_shuffle_lists(*lists):
+    pack = zip(*lists)
+    random.shuffle(pack)
+    return zip(*pack)
 
-        self.cost = cost
-        self.data_provider = data_provider
-        self.noise_model = noise_model
 
-    def evaluate(self, model):
-        X_clean, meta_clean_orig = self.data_provider.next_batch()
+class ContrastiveMultilingualEmbeddingObjective(object):
+    def __init__(self,
+                 tagged_parallel_sequence_provider,
+                 n_contrastive_samples,
+                 margin):
+        self.tagged_parallel_sequence_provider = tagged_parallel_sequence_provider
+        self.n_contrastive_samples = n_contrastive_samples
+        self.margin = margin
 
-        all_grads = []
+    def evaluate(self, tagged_model_collection):
+        t1, t2 = random.choice(self.tagged_parallel_sequence_provider.tags)
 
-        for _ in xrange(5):
-            meta_clean = dict(meta_clean_orig)
-            X_dirty, meta_dirty = self.noise_model.apply(X_clean, meta=dict(meta_clean))
+        m1 = generic.model.utils.ModelEvaluator(
+            tagged_model_collection.get_model(t1),
+            desired_axes=('b', ('d', 'f', 'w')))
+        m2 = generic.model.utils.ModelEvaluator(
+            tagged_model_collection.get_model(t2),
+            desired_axes=('b', ('d', 'f', 'w')))
 
-            Y_hat_clean, meta_clean, model_state_clean = model.fprop(X_clean, meta=dict(meta_clean), return_state=True)
-            Y_hat_dirty, meta_dirty, model_state_dirty = model.fprop(X_dirty, meta=dict(meta_dirty), return_state=True)
+        # energy_function = GaussianEnergy()
+        # loss_function = ContrastiveHingeLoss(margin=self.margin)
+        energy_function = self.__class__.Energy()
+        loss_function = self.__class__.LossFunction(margin=self.margin)
 
-            meta_clean['space_below'] = meta_clean['space_above']
-            meta_dirty['space_below'] = meta_dirty['space_above']
+        p_parallel = self.tagged_parallel_sequence_provider.get_provider((t1, t2))
+        x1_clean, meta1_clean, x2_clean, meta2_clean = p_parallel.next_batch()
 
-            cost, meta, cost_state = self.cost.fprop(Y_hat_clean, Y_hat_dirty, meta=dict(meta_clean)) # not allowed for meta_dirty to be different
-            delta_clean, delta_dirty, meta = self.cost.bprop(Y_hat_clean, Y_hat_dirty, meta=dict(meta), fprop_state=cost_state)
+        total_loss = 0.0
+        grads_1_total = [self._zeros_like(p) for p in m1.model.params()]
+        grads_2_total = [self._zeros_like(p) for p in m2.model.params()]
 
-            grads_clean = model.grads(delta_clean, meta=dict(meta), fprop_state=model_state_clean)
-            grads_dirty = model.grads(delta_dirty, meta=dict(meta), fprop_state=model_state_dirty)
+        y1_clean = m1.fprop(x1_clean, meta1_clean)
+        y2_clean = m2.fprop(x2_clean, meta2_clean)
 
-            # FIXME: abstract this
-            grads = []
-            for gc, gd in zip(grads_clean, grads_dirty):
-                grads.append(gc + gd)
-            all_grads.append(grads)
+        # energy and denerngy are specific
+        # e_clean = energy_function.fprop(y1_clean, y2_clean)
 
-        grads = []
-        for gs in zip(*all_grads):
-            grads.append(sum(gs))
+        for _ in xrange(self.n_contrastive_samples):
+            # new state containers
+            m2_noise = generic.model.utils.ModelEvaluator(
+                tagged_model_collection.get_model(t2),
+                desired_axes=('b', ('d', 'f', 'w')))
 
-        return cost, grads
+            # meta1_noise = dict(meta1_clean)
+            # x1_noise = x1_clean
+            y1_noise = y1_clean
+
+            meta2_noise = dict(meta2_clean)
+            x2_noise, meta2_noise['lengths'] = _parallel_shuffle_lists(x2_clean, meta2_clean['lengths'])
+            y2_noise = m2_noise.fprop(x2_noise, meta2_noise)
+
+            e_clean = energy_function.fprop(y1_clean, y2_clean)
+            e_noise = energy_function.fprop(y1_noise, y2_noise)
+
+            loss = loss_function.fprop(e_clean, e_noise)
+            total_loss += self._mean(loss)
+
+            dloss_clean, dloss_noise = loss_function.bprop(e_clean, e_noise)
+
+            denergy_1_clean, denergy_2_clean = energy_function.bprop(y1_clean, y2_clean, dloss_clean)
+            denergy_1_noise, denergy_2_noise = energy_function.bprop(y1_noise, y2_noise, dloss_noise)
+
+            grads_1_clean = m1.grads(denergy_1_clean)
+            grads_1_noise = m1.grads(denergy_1_noise)
+
+            grads_2_clean = m2.grads(denergy_2_clean)
+            grads_2_noise = m2_noise.grads(denergy_2_noise)
+
+            for g, g_clean, g_noise in zip(grads_1_total, grads_1_clean, grads_1_noise):
+                g += g_clean
+                g += g_noise
+
+            for g, g_clean, g_noise in zip(grads_2_total, grads_2_clean, grads_2_noise):
+                g += g_clean
+                g += g_noise
+
+        full_grads = tagged_model_collection.full_grads_from_tagged_grads({
+            t1: grads_1_total,
+            t2: grads_2_total,
+        })
+
+        return total_loss, full_grads

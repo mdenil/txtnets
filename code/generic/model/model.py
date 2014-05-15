@@ -1,6 +1,7 @@
 __author__ = 'mdenil'
 
 import itertools
+from collections import OrderedDict
 
 
 class CSM(object):
@@ -127,7 +128,6 @@ class CSM(object):
         ])
 
 
-
 def _ensure_layer_fprop_state(ret):
     if len(ret) == 3:
         X, meta, layer_fprop_state = ret
@@ -136,3 +136,29 @@ def _ensure_layer_fprop_state(ret):
         layer_fprop_state = {}
 
     return X, meta, layer_fprop_state
+
+
+# Models need to have an order in there so grads will work
+class TaggedModelCollection(object):
+    def __init__(self, tagged_models):
+        self.tagged_models = OrderedDict(tagged_models)
+
+    def get_model(self, tag):
+        return self.tagged_models[tag]
+
+    def params(self):
+        params = []
+        for m in self.tagged_models.itervalues():
+            params.extend(m.params())
+        return params
+
+    def full_grads_from_tagged_grads(self, tagged_grads):
+        grads = []
+
+        for tag, model in self.tagged_models.iteritems():
+            if tag in tagged_grads:
+                grads.extend(tagged_grads[tag])
+            else:
+                grads.extend(map(self._zeros_like, model.params()))
+
+        return grads

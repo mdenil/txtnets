@@ -28,6 +28,7 @@ __host_device_component_mapping = {
     cpu.model.encoding.DictionaryEncoding: gpu.model.encoding.DictionaryEncoding,
 
     cpu.model.model.CSM: gpu.model.model.CSM,
+    cpu.model.model.TaggedModelCollection: gpu.model.model.TaggedModelCollection,
 
     cpu.model.nonlinearity.Relu: gpu.model.nonlinearity.Relu,
     cpu.model.nonlinearity.Tanh: gpu.model.nonlinearity.Tanh,
@@ -40,6 +41,7 @@ __host_device_component_mapping = {
     cpu.model.transfer.Linear: gpu.model.transfer.Linear,
     cpu.model.transfer.SentenceConvolution: gpu.model.transfer.SentenceConvolution,
     cpu.model.transfer.Softmax: gpu.model.transfer.Softmax,
+    cpu.model.transfer.AxisReduction: gpu.model.transfer.AxisReduction,
 
     gpu.model.transport.HostToDevice: cpu.model.transport.HostToDevice,
     gpu.model.transport.DeviceToHost: cpu.model.transport.DeviceToHost,

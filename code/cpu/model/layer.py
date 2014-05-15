@@ -23,3 +23,7 @@ class Layer(object):
             # assign to values in the array referenced by param
             param.ravel()[:] = values[start:end]
             start = end
+
+    def __repr__(self):
+        return "{}()".format(
+            self.__class__.__name__)

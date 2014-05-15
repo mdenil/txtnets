@@ -270,8 +270,6 @@ class SentenceConvolution(object):
             self.W.shape)
 
 
-
-
 class Bias(object):
     def __init__(self, n_input_dims, n_feature_maps, b=None):
         self.n_input_dims = n_input_dims
@@ -320,3 +318,52 @@ class Bias(object):
             self.__class__.__name__,
             self.n_input_dims,
             self.n_feature_maps)
+
+
+class AxisReduction(object):
+    def __init__(self, axis):
+        self.axis = axis
+
+    def fprop(self, X, meta):
+        working_space = meta['space_below']
+
+        X = working_space.fold(X)
+        working_space = working_space.folded()
+
+        if not self.axis in working_space.axes:
+            raise ValueError("Cannot reduce along axis={} because it does not appear in axes={}".format(
+                self.axis, working_space.axes))
+
+        fprop_state = {
+            'expanded_size': working_space.get_extent(self.axis)
+        }
+
+        X, working_space = self._fprop(X, working_space)
+
+        meta['space_above'] = working_space
+
+        return X, meta, fprop_state
+
+    def bprop(self, delta, meta, fprop_state):
+        working_space = meta['space_above']
+
+        delta = working_space.fold(delta)
+        working_space = working_space.folded()
+
+        if self.axis in working_space.axes:
+            if working_space.get_extent(self.axis) != 1:
+                raise ValueError("Cannot introduce axis={}, already present in axes={}".format(
+                    self.axis, working_space.axes))
+            else:
+                new_axes = working_space.axes
+        else:
+            new_axes = working_space.axes = (self.axis,)
+
+        delta, working_space = working_space.transform(
+            delta,
+            new_axes,
+            **{self.axis: fprop_state['expanded_size']})
+
+        meta['space_below'] = working_space
+
+        return delta, meta

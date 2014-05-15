@@ -99,53 +99,11 @@ class Bias(generic.model.transfer.Bias, layer.Layer):
         return [grad_b]
 
 
-class AxisReduction(layer.Layer):
-    def __init__(self, axis):
-        super(AxisReduction, self).__init__()
-        self.axis = axis
+class AxisReduction(generic.model.transfer.AxisReduction, layer.Layer):
+    def _fprop(self, X, X_space):
+        X = np.sum(X, axis=X_space.axes.index(self.axis))
+        X_space = X_space.without_axes(self.axis)
+        return X, X_space
 
-    def fprop(self, X, meta):
-        working_space = meta['space_below']
-
-        X = working_space.fold(X)
-        working_space = working_space.folded()
-
-        if not self.axis in working_space.axes:
-            raise ValueError("Cannot reduce along axis={} because it does not appear in axes={}".format(
-                self.axis, working_space.axes))
-
-        target_axis_index= working_space.axes.index(self.axis)
-        fprop_state = {
-            'expanded_size': X.shape[target_axis_index]
-        }
-
-        X = np.sum(X, axis=target_axis_index)
-        working_space = working_space.without_axes(self.axis)
-
-        meta['space_above'] = working_space
-
-        return X, meta, fprop_state
-
-    def bprop(self, delta, meta, fprop_state):
-        working_space = meta['space_above']
-
-        delta = working_space.fold(delta)
-        working_space = working_space.folded()
-
-        if self.axis in working_space.axes:
-            if working_space.get_extent(self.axis) != 1:
-                raise ValueError("Cannot introduce axis={}, already present in axes={}".format(
-                    self.axis, working_space.axes))
-            else:
-                new_axes = working_space.axes
-        else:
-            new_axes = working_space.axes = (self.axis,)
-
-        delta, working_space = working_space.transform(
-            delta,
-            new_axes,
-            **{self.axis: fprop_state['expanded_size']})
-
-        meta['space_below'] = working_space
-
-        return delta, meta
+    # bprop is generic
+    # no grads

@@ -72,3 +72,21 @@ class SequenceMinibatchProvider(
             meta['space_below'].extents)
 
         return X_batch, meta
+
+
+class PaddedParallelSequenceMinibatchProvider(
+        generic.optimize.data_provider.PaddedParallelSequenceMinibatchProvider):
+
+    def next_batch(self):
+        X1_batch, meta1, X2_batch, meta2 = super(PaddedParallelSequenceMinibatchProvider, self).next_batch()
+
+        # Not actually providing GPU X's, just a GPU space.  The Xs should be run through a gpu encoder.
+        meta1['space_below'] = gpu.space.GPUSpace(
+            meta1['space_below'].axes,
+            meta1['space_below'].extents)
+
+        meta2['space_below'] = gpu.space.GPUSpace(
+            meta2['space_below'].axes,
+            meta2['space_below'].extents)
+
+        return X1_batch, meta1, X2_batch, meta2

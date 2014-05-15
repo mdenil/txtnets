@@ -1,7 +1,6 @@
 __author__ = 'mdenil'
 
 import numpy as np
-from collections import OrderedDict
 
 import generic.model.model
 
@@ -13,31 +12,16 @@ class CSM(generic.model.model.CSM, cpu.model.layer.Layer):
     Space = cpu.space.CPUSpace
     NDArray = np.ndarray
 
+    def move_to_cpu(self):
+        """
+        This is a no-op here to make the interface between CPU and GPU models the same.
+        """
+        return self
 
-# Models need to have an order in there so grads will work
-class TaggedModelCollection(object):
-    def __init__(self, tagged_models):
-        self.tagged_models = OrderedDict(tagged_models)
 
-    def get_model(self, tag):
-        return self.tagged_models[tag]
-
-    def params(self):
-        params = []
-        for m in self.tagged_models.itervalues():
-            params.extend(m.params())
-        return params
-
-    def full_grads_from_tagged_grads(self, tagged_grads):
-        grads = []
-
-        for tag, model in self.tagged_models.iteritems():
-            if tag in tagged_grads:
-                grads.extend(tagged_grads[tag])
-            else:
-                grads.extend(map(np.zeros_like, model.params()))
-
-        return grads
+class TaggedModelCollection(generic.model.model.TaggedModelCollection):
+    def _zeros_like(self, x):
+        return np.zeros_like(x)
 
     def pack(self):
         packed = []
@@ -53,3 +37,9 @@ class TaggedModelCollection(object):
                 # assign to values in the array referenced by param
                 param.ravel()[:] = values[start:end]
                 start = end
+
+    def move_to_cpu(self):
+        """
+        This is a no-op here to make the interface between CPU and GPU models the same.
+        """
+        return self
