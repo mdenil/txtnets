@@ -60,7 +60,12 @@ class FFTConv1D(object):
         scikits.cuda.fft.fft(X, X_fft, forward_plan)
         scikits.cuda.fft.fft(K, K_fft, forward_plan)
         X_fft *= K_fft
-        scikits.cuda.fft.ifft(X_fft, X, backward_plan, True)
+
+        # This is really weird, but scaling inside the ifft is a lot slower than scaling manually.
+        # I'm not the only one who has encountered this:
+        # https://groups.google.com/forum/#!topic/theano-users/6xiFFpBBDq0
+        scikits.cuda.fft.ifft(X_fft, X, backward_plan, False)
+        X /= X.size/backward_plan.batch
 
         # trim
 
