@@ -15,6 +15,14 @@ import reikna.algorithms
 import scikits.cuda.linalg
 scikits.cuda.linalg.init()
 
+# I don't really understand the implications of making these module level instead of class level.  I think it will
+# cause reikna operations to be synchronized between all of the instances using the global thread.
+#
+# This needs to happen before any pycuda.compiler.SourceModules get run or you will get invalid handle errrors.
+cuda_api = reikna.cluda.cuda_api()
+cuda_thread = cuda_api.Thread.create()
+
+
 
 def cpu_to_gpu(X):
     return pycuda.gpuarray.to_gpu(X)
@@ -23,9 +31,49 @@ def gpu_to_cpu(X):
     return X.get()
 
 
-def fliplr(X):
-    # TODO: properly implement this
-    return cpu_to_gpu(np.fliplr(gpu_to_cpu(X)).copy())
+_fliplr_module = pycuda.compiler.SourceModule("""
+__global__ void fliplr_kernel(float* in, int n, int m, float* out)
+{
+    extern __shared__ float buffer[];
+
+    const int r = blockIdx.x * blockDim.x + threadIdx.x;
+    const int c_in = blockIdx.y * blockDim.y + threadIdx.y;
+    const int c_out = m - c_in - 1;
+
+    const int r_block = threadIdx.x;
+    const int c_block = threadIdx.y;
+
+    if (r < n && c_in < m) {
+        buffer[r_block * m + c_block] = in[r * m + c_in];
+        __syncthreads();
+        out[r * m + c_out] = buffer[r_block * m + c_block];
+     }
+}
+""")
+
+def fliplr(x):
+    y = pycuda.gpuarray.empty(x.shape, dtype=x.dtype, allocator=fliplr.memory_pool.allocate)
+
+    block_size = 512
+    rows_per_block = block_size // x.shape[1]
+    num_blocks = x.shape[0] // rows_per_block + (1 if x.shape[0] % rows_per_block > 0 else 0)
+
+    block = (rows_per_block, x.shape[1], 1)
+    grid = (num_blocks, 1)
+
+    fliplr.fliplr_kernel(
+        x,
+        np.int32(x.shape[0]),
+        np.int32(x.shape[1]),
+        y,
+        shared=int(block_size * x.dtype.itemsize),
+        block=block,
+        grid=grid)
+
+    return y
+
+fliplr.memory_pool = pycuda.tools.DeviceMemoryPool()
+fliplr.fliplr_kernel = _fliplr_module.get_function("fliplr_kernel")
 
 
 def sum_along_axis(X, space, axis):
@@ -61,10 +109,10 @@ sum_along_axis.cache = {}
 
 
 
-# I don't really understand the implications of making these module level instead of class level.  I think it will
-# cause reikna operations to be synchronized between all of the instances using the global thread.
-cuda_api = reikna.cluda.cuda_api()
-cuda_thread = cuda_api.Thread.create()
+# # I don't really understand the implications of making these module level instead of class level.  I think it will
+# # cause reikna operations to be synchronized between all of the instances using the global thread.
+# cuda_api = reikna.cluda.cuda_api()
+# cuda_thread = cuda_api.Thread.create()
 
 
 def transpose(X, axes):
