@@ -10,4 +10,4 @@ cnn-sm-gpu-kmax
 *.swp
 .*.sqlite
 *.pkl
-
+.DS_Store
