@@ -24,3 +24,6 @@ class GPUUpdateRuleUtilityMixin(object):
 class AdaGrad(GPUUpdateRuleUtilityMixin, generic_rule.AdaGrad):
     pass
 
+
+class AdaDelta(GPUUpdateRuleUtilityMixin, generic_rule.AdaDelta):
+    pass
