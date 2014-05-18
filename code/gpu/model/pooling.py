@@ -34,73 +34,12 @@ class KMaxPooling(generic.model.pooling.KMaxPooling, gpu.model.layer.Layer):
         return cpu_class(k=self.k, k_dynamic=self.k_dynamic)
 
 
-# X should be size (N, M)
-# out should be size (N/2, M)
-# start this kernel with a 2d group of threads of shape (N/2, M)
-# N should be even
-_sum_folding_module = pycuda.compiler.SourceModule("""
-__global__ void fprop_kernel(float* X, int N, int M, float* out)
-{
-    const int r1 = blockIdx.x * blockDim.x + threadIdx.x;
-    const int r2 = r1 + N/2;
-    const int c = blockIdx.y * blockDim.y + threadIdx.y;
-
-    if (r1 < N/2 && c < M) {
-        out[r1 * M + c] = X[r1 * M + c] + X[r2 * M + c];
-    }
-}
-""")
-
-
 class SumFolding(generic.model.pooling.SumFolding, gpu.model.layer.Layer):
-    block_size = 512
-
-    def __init__(self, *args, **kwargs):
-        super(SumFolding, self).__init__(*args, **kwargs)
-        self.__acquire_device_kernels()
-
-    def _fprop(self, X):
-        out = pycuda.gpuarray.empty((X.shape[0]//2, X.shape[1]), dtype=np.float32)
-
-        # TODO: clean up this calculation
-        if X.shape[1] > self.__class__.block_size:
-            blocks_per_row = X.shape[1] // self.__class__.block_size + 1
-
-            block = (1, self.__class__.block_size, 1)
-            grid = (X.shape[0], blocks_per_row)
-
-        else:
-            rows_per_block = self.__class__.block_size // X.shape[1] + 1
-            num_blocks = X.shape[0] // rows_per_block + 1
-
-            block = (rows_per_block, X.shape[1], 1)
-            grid = (num_blocks, 1)
-
-        self._fprop_kernel(
-            X,
-            np.int32(X.shape[0]),
-            np.int32(X.shape[1]),
-            out,
-            block=block,
-            grid=grid)
-
-        return out
-
+    def _fprop(self, X, X_space):
+        return gpu.utils.sum_along_axis(X, X_space, 'd2')
 
     # bprop is completely generic
     # there are no grads
-
-    def __acquire_device_kernels(self):
-        self._fprop_kernel = _sum_folding_module.get_function("fprop_kernel")
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        del state['_fprop_kernel']
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self.__acquire_device_kernels()
 
     def move_to_cpu(self):
         from gpu.model.host_device_component_mapping import get_cpu_analog

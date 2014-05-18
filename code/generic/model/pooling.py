@@ -120,10 +120,11 @@ class SumFolding(object):
         d = working_space.get_extent('d')
         assert d % 2 == 0
 
-        X, working_space = working_space.transform(X, ('d', ('b', 'f', 'w')))
+        X, working_space = working_space.transform(X, ('d2', 'd', 'b', 'f', 'w'))
+        working_space = working_space.with_extents(d=d//2, d2=2)
+        X = working_space.fold(X)
 
-        X = self._fprop(X)
-        working_space = working_space.with_extents(d=X.shape[working_space.axes.index('d')])
+        X, working_space = self._fprop(X, working_space)
 
         meta['space_above'] = working_space
         return X, meta, {}

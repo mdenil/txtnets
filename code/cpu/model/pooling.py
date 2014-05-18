@@ -14,10 +14,10 @@ class KMaxPooling(generic.model.pooling.KMaxPooling, layer.Layer):
 
 
 class SumFolding(generic.model.pooling.SumFolding, layer.Layer):
-    def _fprop(self, X):
-        folded_size = X.shape[0] // 2
-        Y = X[:folded_size] + X[folded_size:]
-        return Y
+    def _fprop(self, X, X_space):
+        X = np.sum(X, axis=X_space.axes.index('d2'))
+        X_space = X_space.without_axes('d2')
+        return X, X_space
 
     # bprop is entirely generic
     # no grads
