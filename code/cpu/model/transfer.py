@@ -49,7 +49,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 
         X_space = X_space.with_extents(w=X.shape[1])
 
-        X, X_space = X_space.transform(X, (('d', 'b', 'f'), 'c', 'w'))
+        X, X_space = X_space.transform(X, (('b', 'd', 'f'), 'c', 'w'))
         X = X.sum(axis=X_space.axes.index('c'))
         X_space = X_space.without_axes('c')
 
@@ -76,7 +76,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 
         grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
         grad_W_space = grad_W_space.without_axes('b')
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('d', 'b', 'f', 'c'), 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b', 'd', 'f', 'c'), 'w'])
 
         return [grad_W]
 
@@ -84,7 +84,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
 class Bias(generic.model.transfer.Bias, layer.Layer):
 
     def _fprop(self, X, X_space):
-        return X + self.b[:, np.newaxis, :, np.newaxis]
+        return X + self.b[np.newaxis, :, :, np.newaxis]
 
     # bprop is a no-op
 

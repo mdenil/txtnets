@@ -25,17 +25,3 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, layer.Layer):
         grad_E[self.padding] = 0.0
 
         return [grad_E]
-
-    # def indicator_matrix(self, X, meta):
-    #     X, working_space = meta['space_below'].transform(X, [('b','w')])
-    #
-    #     I = np.zeros((X.size, self.vocabulary_size))
-    #     I[np.arange(X.size), X.ravel()] = 1
-    #
-    #     I_extent = OrderedDict()
-    #     I_extent['b'] = working_space.get_extent('b')
-    #     I_extent['w'] = working_space.get_extent('w')
-    #     I_extent['d'] = self.vocabulary_size
-    #     I_space = space.CPUSpace([('b', 'w'), 'd'], I_extent)
-    #
-    #     return I, I_space

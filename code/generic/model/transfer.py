@@ -53,7 +53,7 @@ class Linear(object):
         X_space = fprop_state['X_space']
         X, X_space = X_space.transform(X, ('b', ('d', 'f', 'w')))
 
-        delta, delta_space = meta['space_above'].transform(delta, ('b', ('d','f','w')))
+        delta, delta_space = meta['space_above'].transform(delta, ('b', ('d', 'f', 'w')))
 
         return self._grads(X, delta)
 
@@ -167,16 +167,16 @@ class SentenceConvolution(object):
             self.W = 0.1 * np.random.standard_normal(
                 size=(n_input_dimensions, n_feature_maps, n_channels, kernel_width))
             self._kernel_space = cpu.space.CPUSpace.infer(self.W, ('d', 'f', 'c', 'w'))
-            self.W, self._kernel_space = self._kernel_space.transform(self.W, [('d', 'b', 'f', 'c'), 'w'])
+            self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'd', 'f', 'c'), 'w'])
         else:
             # :(
             assert W.shape == (n_input_dimensions * n_feature_maps * n_channels, kernel_width)
             self.W = W
             self._kernel_space = cpu.space.CPUSpace(
-                (('d', 'b', 'f', 'c'), 'w'),
+                (('b', 'd', 'f', 'c'), 'w'),
                 collections.OrderedDict([
-                    ('d', n_input_dimensions),
                     ('b', 1),
+                    ('d', n_input_dimensions),
                     ('f', n_feature_maps),
                     ('c', n_channels),
                     ('w', kernel_width)
@@ -206,7 +206,7 @@ class SentenceConvolution(object):
             'lengths_below': lengths.copy()
         }
 
-        d, b, c, w = working_space.get_extents(('d', 'b', 'c', 'w'))
+        b, d, c, w = working_space.get_extents(('b', 'd', 'c', 'w'))
 
         if not self.n_channels == c:
             raise ValueError("n_chanels={} but the data has {} channels.".format(self.n_channels, c))
@@ -214,7 +214,7 @@ class SentenceConvolution(object):
             raise ValueError("n_input_dimensions={} but the data has {} dimensions.".format(self.n_input_dimensions, d))
         f = self.n_feature_maps
 
-        X, working_space = working_space.transform(X, (('d', 'b', 'f', 'c'), 'w'), f=f)
+        X, working_space = working_space.transform(X, (('b', 'd', 'f', 'c'), 'w'), f=f)
 
         X, working_space = self._fprop(X, working_space)
 
@@ -233,7 +233,7 @@ class SentenceConvolution(object):
 
         delta, working_space = working_space.transform(
             delta,
-            (('d', 'b', 'f', 'c'), 'w'),
+            (('b', 'd', 'f', 'c'), 'w'),
             c=X_space.get_extent('c'))
 
         delta, working_space = self._bprop(delta, working_space)
@@ -252,11 +252,11 @@ class SentenceConvolution(object):
 
         delta, delta_space = delta_space.transform(
             delta,
-            (('d', 'b', 'f', 'c'), 'w'),
+            (('b', 'd', 'f', 'c'), 'w'),
             c=X_space.get_extent('c'))
         X, X_space = X_space.transform(
             X,
-            (('d', 'b', 'f', 'c'), 'w'),
+            (('b', 'd', 'f', 'c'), 'w'),
             f=delta_space.get_extent('f'))
 
         return self._grads(delta, delta_space, X)
@@ -289,7 +289,7 @@ class Bias(object):
         if not self.n_feature_maps == working_space.get_extent('f'):
             raise ValueError("n_feature_maps={} but input has {} features.".format(self.n_feature_maps, working_space.get_extent('f')))
 
-        X, working_space = working_space.transform(X, ('d', 'b', 'f', 'w'))
+        X, working_space = working_space.transform(X, ('b', 'd', 'f', 'w'))
 
         X = self._fprop(X, working_space)
 

@@ -14,7 +14,6 @@ class WordEmbedding(object):
 
         if E is None:
             self.E = 0.01 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
-            # self.E = 0.0025 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
             self.E[padding] = 0.0
         else:
@@ -36,7 +35,7 @@ class WordEmbedding(object):
 
         # This is the standard order for axes in most other layers, we transform here instead of later so that the
         # transformation happens before any broadcasts.
-        Y, Y_space = Y_space.transform(Y, (('d', 'b'), 'w'))
+        Y, Y_space = Y_space.transform(Y, (('b', 'd'), 'w'))
         meta['space_above'] = Y_space
 
         return Y, meta, fprop_state
@@ -48,7 +47,7 @@ class WordEmbedding(object):
         delta_space = meta['space_above']
 
         delta, delta_space = delta_space.transform(delta, (('b', 'w'), 'd'))
-        Y, Y_space = Y_space.transform(delta, (('b', 'w'), 'd'))
+        Y, Y_space = Y_space.transform(Y, (('b', 'w'), 'd'))
 
         delta = self._bprop(delta, Y)
 

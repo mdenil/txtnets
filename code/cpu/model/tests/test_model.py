@@ -63,6 +63,7 @@ class ModelBProp(unittest.TestCase):
 
         def grad(x):
             X = x.reshape(self.X.shape)
+            print X.shape
 
             Y, meta, fprop_state = self.model.fprop(X, meta=dict(self.meta), return_state=True)
             meta['space_below'] = meta['space_above']
@@ -70,11 +71,17 @@ class ModelBProp(unittest.TestCase):
             delta, meta = self.cost.bprop(Y, self.Y, meta=dict(meta), fprop_state=cost_state)
             delta, meta = self.model.bprop(delta, meta=dict(meta), fprop_state=fprop_state, return_state=True)
 
-            print "------------------"
-            print delta.shape, meta['space_below']
+            print delta.shape, meta['space_below'], self.meta['space_below']
 
             delta, _ = meta['space_below'].transform(delta, self.meta['space_below'].axes)
+            print delta.shape, _
             return delta.ravel()
+
+        approx = scipy.optimize.approx_fprime(self.X.ravel(), func, 1e-6).reshape(self.X.shape)
+        exact = grad(self.X.ravel()).reshape(self.X.shape)
+
+        # print approx - exact
+        print np.max(np.abs(approx - exact))
 
         assert scipy.optimize.check_grad(func, grad, self.X.ravel()) < 1e-5
 

@@ -19,9 +19,9 @@ class KMaxPooling(object):
         # FIXME: this is a hack to guarantee statelessness
         X = X.copy()
 
-        d, f, b, w = working_space.get_extents(['d', 'f', 'b', 'w'])
+        b, d, f, w = working_space.get_extents(['b', 'd', 'f', 'w'])
 
-        working_axes = (('d', 'b', 'f'), 'w')
+        working_axes = (('b', 'd', 'f'), 'w')
 
         X, working_space = working_space.transform(X, working_axes)
         # X, working_space = working_space.transform(X, [('d','f','b'), 'w'])
@@ -66,7 +66,7 @@ class KMaxPooling(object):
         fprop_state['index_mask'] = index_mask
         fprop_state['k'] = k
 
-        rows = np.vstack([np.arange(working_space.get_extent(('d', 'b', 'f')))] * k).T
+        rows = np.vstack([np.arange(working_space.get_extent(('b', 'd', 'f')))] * k).T
 
         X = X[rows, k_max_indexes]
         X[index_mask] = 0
@@ -90,11 +90,11 @@ class KMaxPooling(object):
         index_mask = np.logical_not(fprop_state['index_mask'])
         k_max_indexes = fprop_state['k_max_indexes']
 
-        working_axes = (('d', 'b', 'f'), 'w')
+        working_axes = (('b', 'd', 'f'), 'w')
 
         delta, working_space = space_above.transform(delta, working_axes)
 
-        rows = np.vstack([np.arange(space_below.get_extent(('d', 'b', 'f')))] * fprop_state['k']).T
+        rows = np.vstack([np.arange(space_below.get_extent(('b', 'd', 'f')))] * fprop_state['k']).T
         back = np.zeros(space_below.shape)
         back, _ = space_below.transform(back, working_axes)
 
@@ -120,7 +120,7 @@ class SumFolding(object):
         d = working_space.get_extent('d')
         assert d % 2 == 0
 
-        X, working_space = working_space.transform(X, ('d2', 'd', 'b', 'f', 'w'))
+        X, working_space = working_space.transform(X, ('b', 'd2', 'd', 'f', 'w'))
         working_space = working_space.with_extents(d=d//2, d2=2)
         X = working_space.fold(X)
 

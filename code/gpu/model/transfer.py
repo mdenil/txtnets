@@ -108,7 +108,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
         X_space = X_space.with_extents(w=X.shape[1])
 
         X, X_space = gpu.utils.sum_along_axis(X, X_space, 'c')
-        X, X_space = X_space.transform(X, (('d', 'b', 'f'), 'w'))
+        X, X_space = X_space.transform(X, (('b', 'd', 'f'), 'w'))
 
         return X, X_space
 
@@ -128,7 +128,7 @@ class SentenceConvolution(generic.model.transfer.SentenceConvolution, layer.Laye
         grad_W_space = delta_space.with_extents(w=grad_W.shape[1])
 
         grad_W, grad_W_space = gpu.utils.sum_along_axis(grad_W, grad_W_space, 'b')
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('d', 'b', 'f', 'c'), 'w'])
+        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b', 'd', 'f', 'c'), 'w'])
 
         return [grad_W]
 

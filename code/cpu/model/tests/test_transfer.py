@@ -127,8 +127,8 @@ class Bias(unittest.TestCase):
 
     def test_fprop(self):
         actual, meta, fprop_state = self.layer.fprop(self.X, meta=dict(self.meta))
-        X, _ = self.X_space.transform(self.X, ('d', 'b', 'f', 'w'))
-        expected = X + self.layer.b[:, np.newaxis, :, np.newaxis]
+        X, _ = self.X_space.transform(self.X, ('b', 'd', 'f', 'w'))
+        expected = X + self.layer.b[np.newaxis, :, :, np.newaxis]
 
         assert np.allclose(actual, expected)
 
