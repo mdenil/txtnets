@@ -31,6 +31,7 @@ from gpu.optimize.sgd import SGD
 from gpu.optimize.objective import CostMinimizationObjective
 from gpu.optimize.regularizer import L2Regularizer
 from gpu.optimize.update_rule import AdaGrad
+from gpu.optimize.update_rule import AdaDelta
 from gpu.optimize.data_provider import LabelledSequenceMinibatchProvider
 
 from cpu.optimize.grad_check import ModelGradientChecker
@@ -265,7 +266,7 @@ def run():
 
     cost_function = CrossEntropy()
 
-    regularizer = L2Regularizer(lamb=1e-4)
+    regularizer = L2Regularizer(lamb=1e-5)
 
     objective = CostMinimizationObjective(
         cost=cost_function,
@@ -273,8 +274,13 @@ def run():
         regularizer=regularizer)
 
     update_rule = AdaGrad(
-        gamma=0.05,
+        gamma=0.1,
         model_template=tweet_model)
+
+    # update_rule = AdaDelta(
+    #     rho=0.99,
+    #     epsilon=1e-6,
+    #     model_template=tweet_model)
 
     optimizer = SGD(
         model=tweet_model,
@@ -323,8 +329,11 @@ def run():
                 np.mean(np.abs(tweet_model.pack())),
                 best_acc)
 
-        # if batch_index == 100:
-        #     break
+        # if batch_index % 2500 == 0 and batch_index > 0:
+        #     update_rule.gamma *= 0.5
+
+        if batch_index == 1000:
+            break
 
         # if batch_index % 100 == 0:
         #     with open("model.pkl", 'w') as model_file:
