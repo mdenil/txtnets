@@ -11,7 +11,6 @@ import pycuda.tools
 import reikna.cluda
 import reikna.algorithms
 
-
 import scikits.cuda.linalg
 scikits.cuda.linalg.init()
 
@@ -22,10 +21,13 @@ scikits.cuda.linalg.init()
 cuda_api = reikna.cluda.cuda_api()
 cuda_thread = cuda_api.Thread.create()
 
+# Needs to happen after the reikna api and thread creation
+import gpu._utils.sum_along_axis
 
 
 def cpu_to_gpu(X):
     return pycuda.gpuarray.to_gpu(X)
+
 
 def gpu_to_cpu(X):
     return X.get()
@@ -50,6 +52,7 @@ __global__ void fliplr_kernel(float* in, int n, int m, float* out)
      }
 }
 """)
+
 
 def fliplr(x):
     y = pycuda.gpuarray.empty(x.shape, dtype=x.dtype, allocator=fliplr.memory_pool.allocate)
@@ -84,35 +87,13 @@ def sum_along_axis(X, space, axis):
         working_space = space.without_axes(axis)
         return working_space.unfold(X), working_space
 
-    # bring the target axis to the right
-    target_axes = (tuple(ax for ax in space.folded_axes if ax != axis), axis)
-    X, working_space = space.transform(X, target_axes)
-
-    key = (working_space.get_extent(axis), X.dtype)
-    try:
-        summer = sum_along_axis.cache[key]
-    except KeyError:
-        summer = pycuda.gpuarray.empty(
-            (working_space.get_extent(axis), 1),
-            dtype=X.dtype)
-        summer.fill(1.0)
-        sum_along_axis.cache[key] = summer
-
-    X = scikits.cuda.linalg.dot(X, summer).ravel()
-    working_space = working_space.without_axes(axis)
+    target_axis_index = space.folded_axes.index(axis)
+    out = gpu._utils.sum_along_axis.sum_along_axis(
+        space.fold(X),
+        target_axis_index)
     space = space.without_axes(axis)
-    X, working_space = working_space.transform(X, space.axes)
 
-    return X, working_space
-
-sum_along_axis.cache = {}
-
-
-
-# # I don't really understand the implications of making these module level instead of class level.  I think it will
-# # cause reikna operations to be synchronized between all of the instances using the global thread.
-# cuda_api = reikna.cluda.cuda_api()
-# cuda_thread = cuda_api.Thread.create()
+    return space.unfold(out), space
 
 
 def transpose(X, axes):
@@ -154,7 +135,6 @@ def transpose(X, axes):
     return out
 
 transpose.compiled_cache = {}
-
 
 
 _broadcast_module = pycuda.compiler.SourceModule("""
