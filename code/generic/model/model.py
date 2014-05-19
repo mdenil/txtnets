@@ -61,12 +61,19 @@ class CSM(object):
         else:
             return X, meta, fprop_state
 
-    def bprop(self, delta, meta, fprop_state, return_state=False):
+    def bprop(self, delta, meta, fprop_state, num_layers=None, return_state=False):
         layer_fprop_states = fprop_state['layer_fprop_states']
 
-        assert len(self.layers) == len(layer_fprop_states)
-
         for layer_index, layer, layer_fprop_state in reversed(zip(itertools.count(), self.layers, layer_fprop_states)):
+
+            #checking layers to be skipped
+            if num_layers:
+                if num_layers < 0:
+                    if layer_index<-num_layers:
+                        break
+                elif layer_index<len(self.layers)-num_layers:
+                    break
+
             # The space below the layer above is the space above the current layer, we dont know what the space below
             # this layer is yet.
             if layer_index < len(self.layers) - 1:
