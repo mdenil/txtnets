@@ -10,101 +10,102 @@ from cpu.model.cost import CrossEntropy
 
 import cpu.optimize.data_provider
 import random
+import operator
 
+data_dir = "../data"
+visual_dir = "../visualisations"
+model_dir = "../models"
 
-data_dir = "../data/sentiment140"
+def shuffle(x, y=None):
+    if y:
+        combined = zip(x,y)
+        random.shuffle(combined)
+        x, y = map(list, zip(*combined))
+        return x, y
+    else:
+        random.shuffle(x)
+        return x
 
 def run():
     parser = argparse.ArgumentParser(
         description="Evaluate a trained network on the sentiment140 test set")
     parser.add_argument("--model_file", help="pickle file to load the model from")
+    parser.add_argument("--output_file", help="html file to write the output to")
+    parser.add_argument("--dataset", help="name of the dataset to visualise")
     args = parser.parse_args()
 
-    with open(args.model_file) as model_file:
+    #Preparing filenames
+    model_file = os.path.join(model_dir, args.model_file)
+    test_file = os.path.join(data_dir, args.dataset, args.dataset + '.test.clean.json')
+    vocab_file = os.path.join(data_dir, args.dataset, args.dataset + '.train.clean.dictionary.encoding.json')
+    output_file = os.path.join(visual_dir, args.output_file)
+
+    #Opening model file
+    with open(model_file) as model_file:
         model = pickle.load(model_file)
 
     print model
 
-    test_modified = "sentiment140.test.clean2.json"
-
-    with open(os.path.join(data_dir, test_modified)) as data_file:
+    #Opening data file to visualise
+    with open(test_file) as data_file:
         data = json.loads(data_file.read())
         X, Y = map(list, zip(*data))
         Y_original = Y
         Y = [[":)", ":("].index(y) for y in Y]
 
-    #added shuffling
-    # combined = zip(X, Y)
-    # random.shuffle(combined)
-    # X, Y = map(list, zip(*combined))
-    #end
-
-
-    # X=X[:50]
-    # Y=Y[:50]
-
-    with open(os.path.join(data_dir, "sentiment140.train.clean.dictionary.encoding.json")) as alphabet_file:
+    #Loading vocabulary
+    with open(vocab_file) as alphabet_file:
         alphabet = json.loads(alphabet_file.read())
 
+    #Tokenizing the data
     tokenizer = WordPunctTokenizer()
     new_X = []
     for x in X:
         new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
     X = new_X
 
+    Y_hat, Y_inverted, delta = get_model_output(model, X, Y)
+    #print_visualisation(X, Y_hat, Y_inverted, delta, output_file)
+    extract_lexicon(X, Y_hat, Y_inverted, delta)
 
+def get_model_output(model, X,Y):
+    #Initializing the data provided
     data_provider = cpu.optimize.data_provider.LabelledSequenceBatchProvider(
         X=X, Y=Y, padding='PADDING')
 
 
-    #HERE IT IS
-    #Redifine how to evaluate and regularize
+    #Define the cost function
     cEntr = CrossEntropy()
 
-    #get next batch
+    #Get data and use the model to Predict
     X, Y, meta = data_provider.next_batch()
-    X = np.vstack([np.atleast_2d(x) for x in X])
-
     Y_hat, meta, model_state = model.fprop(X, meta=meta, return_state=True)
 
+    #Create a Y that maximizes the error of the model
+    Y_inverted = enforce_error(Y_hat)
+
+    #Bookkeep the spaces and BPROP to get the deltas
+    meta['space_below'] = meta['space_above']
+    cost, meta, cost_state = cEntr.fprop(Y_hat, Y_inverted, meta=meta)
+    delta, meta = cEntr.bprop(Y_hat, Y_inverted, meta=meta, fprop_state=cost_state)
+    delta, meta = model.bprop(delta, meta=meta, fprop_state=model_state, return_state=True, num_layers=-1)
+    delta, space = meta['space_below'].transform(delta, ('b', 'w'))
+
+    return Y_hat, Y_inverted, delta
+
+def enforce_error(Y_hat):
     Y_inverted = np.ones_like(Y_hat)
     for i in xrange(len(Y_hat)):
         for j in xrange(len(Y_hat[1])):
             if Y_hat[i][j]>0.5:
                 Y_inverted[i][j]=0
+    return Y_inverted
 
-    #print Y_hat[5:]
-    #print Y_inverted[5:]
-
-
-    meta['space_below'] = meta['space_above']
-    cost, meta, cost_state = cEntr.fprop(Y_hat, Y_inverted, meta=meta)
-
-    delta, meta = cEntr.bprop(Y_hat, Y_inverted, meta=meta, fprop_state=cost_state)
-    delta, meta = model.bprop(delta, meta=meta, fprop_state=model_state, return_state=True, num_layers=-1)
-
-    delta, space = meta['space_below'].transform(delta, ('b', 'w'))
-
-
-    #trying to pick the ones where the actuar is :(
-    # combined = zip(X, Y, Y_hat, Y_inverted)
-    # new_combined = []
-    # for tuple in combined:
-    #     x, y, z, e = tuple
-    #     if z[0]<0.5:
-    #         new_combined.append(tuple)
-    # X, Y, Y_hat, Y_inverted = map(list, zip(*new_combined))
-    #end
-
-
+def print_visualisation(X, Y_hat, Y_inverted, delta, output_file):
     abs_delta = np.absolute(delta)
     abs_delta = np.sqrt(abs_delta)
-    abs_delta = np.sqrt(abs_delta)
 
-    #outputfile
-    output_file=open('./model_0padding.html', 'w+')
-
-    #ranking and proceeding
+    output_file=open(output_file, 'w+')
 
     print >> output_file, '<div align="center">'
     for i in xrange(len(X)):
@@ -112,11 +113,9 @@ def run():
         max = np.max(abs_delta[i])
         windows_size = (max-min)/5 #defining 5 levels of importance
         for j in xrange(len(X[i])):
-            # if X[i][j]=='PADDING':
-            #    break
-            # try: X[i][j] = str(X[i][j])
-            # except: continue
-
+            # Don't print PADDING
+            if X[i][j]=='PADDING':
+               break
             if abs_delta[i][j] > min+(windows_size*4):
                 if Y_inverted[i][0]==1:
                     delta[i][j]=-delta[i][j]
@@ -158,16 +157,62 @@ def run():
                     print >> output_file, '<span style="background-color: White">'+str(X[i][j])+'</span>'
         smiley = '&#128522'
         smileyE = '&#128522'
-        if Y[i][1]==1:
+        if Y_hat[i][1]<=0.5:
             smiley = '&#128542'
         if Y_hat[i][1]>0.5:
             smileyE = '&#128542'
-        print >> output_file, 'THE SUM:' + str(sum(delta[i]))
         print >> output_file, '<b>         (EXP:' +smileyE+'/'+smiley+':ACT'+')</b>'
         print >> output_file, '</br>'
         print >> output_file, '</br>'
     print >> output_file, '</div>'
     #DONE
+
+def extract_lexicon(X, Y_hat, Y_inverted, delta):
+    positive_val = dict()
+    positive_count = dict()
+    negative_val = dict()
+    negative_count = dict()
+
+    abs_delta = np.absolute(delta)
+    abs_delta = np.sqrt(abs_delta)
+
+    for i in xrange(len(X)):
+        for j in xrange(len(X[i])):
+            if Y_inverted[i][0]==1:
+                delta[i][j]=-delta[i][j]
+            if delta[i][j]>0:
+                if positive_val.get(X[i][j])!=None:
+                    positive_val[X[i][j]] = positive_val[X[i][j]] + delta[i][j]
+                    positive_count[X[i][j]] += 1
+                else:
+                    positive_val[X[i][j]] = delta[i][j]
+                    positive_count[X[i][j]] = 1
+
+            else:
+                if negative_val.get(X[i][j])!=None:
+                    negative_val[X[i][j]] = negative_val[X[i][j]] + delta[i][j]
+                    negative_count[X[i][j]] += 1
+                else:
+                    negative_val[X[i][j]] = delta[i][j]
+                    negative_count[X[i][j]] = 1
+
+    for word in positive_val:
+        positive_val[word]=positive_val[word]/positive_count[word]
+
+    for word in negative_val:
+        negative_val[word]=negative_val[word]/negative_count[word]
+
+    positive_val = sorted(positive_val.items(), key=operator.itemgetter(1), reverse=True)
+    negative_val = sorted(negative_val.items(), key=operator.itemgetter(1), reverse=True)
+
+    positive_count = sorted(positive_count.items(), key=operator.itemgetter(1), reverse=True)
+    negative_count = sorted(negative_count.items(), key=operator.itemgetter(1), reverse=True)
+
+    for i in xrange(0,19):
+        print positive_val[i]
+    print '-------------------'
+    for i in xrange(0,19):
+        print negative_val[i]
 
 if __name__ == "__main__":
     run()
