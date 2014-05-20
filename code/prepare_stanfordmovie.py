@@ -10,6 +10,7 @@ import psutil
 import simplejson as json
 from collections import Counter
 from nltk.tokenize import WordPunctTokenizer
+import random
 
 # http://help.sentiment140.com/for-students
 
@@ -30,8 +31,7 @@ def extract_data(input_file_name, output_file_name):
     extract_data,
     ["stanfordmovie.train.json", "stanfordmovie.test.json", "stanfordmovie.unsup.json"])
 def create_jsons(input_file_name, output_file_names):
-    #TODO: 1. Add shuffling
-    #TODO: 2. Make filename dynamic
+    #TODO: 1. Make filename dynamic
     #---------------------
     #WORKING ON TRAIN FILE
     pos_dir = os.path.join('aclImdb', "train", "pos")
@@ -52,6 +52,8 @@ def create_jsons(input_file_name, output_file_names):
         with open(os.path.join(neg_dir,file)) as f:
             for line in f:
                 reviews.append([line, ':('])
+
+    random.shuffle(reviews)
 
     with open("stanfordmovie.train.json", 'w') as file:
         file.write("{}\n".format(json.dumps(reviews)))
@@ -77,6 +79,8 @@ def create_jsons(input_file_name, output_file_names):
             for line in f:
                 reviews.append([line, ':('])
 
+    random.shuffle(reviews)
+
     with open("stanfordmovie.test.json", 'w') as file:
         file.write("{}\n".format(json.dumps(reviews)))
 
@@ -93,17 +97,32 @@ def create_jsons(input_file_name, output_file_names):
             for line in f:
                 reviews.append([line, ':|'])
 
+    random.shuffle(reviews)
+
     with open("stanfordmovie.unsup.json", 'w') as file:
         file.write("{}\n".format(json.dumps(reviews)))
 
 
 @ruffus.transform(create_jsons, ruffus.suffix(".json"), ".clean.json")
 def clean_data(input_file_name, output_file_name):
+    #TODO: 1. Cleaning procedure may still need improvement with some html tags
     def clean_word(word):
         word = word.lower() #lowercase is not ideal, TODO:
         word = word.replace('&amp;','&').replace('&lt;','<').replace('&gt;','>').replace('&quot;','"').replace('&#39;',"'")
         word = re.sub(r'(\S)\1+', r'\1\1', word) #normalize repeated characters to two
         word = re.sub(r'(\S\S)\1+', r'\1\1', word)
+
+        word = word.replace("n't", " nt") #<===MAYBE TAKE THIS OFF
+        word = word.replace('"', '')
+        word = word.replace('<br', '').replace('/>','')
+        word = word.replace('(', '')
+        word = word.replace(')', '')
+        word = word.replace('[', '')
+        word = word.replace(']', '')
+        word = word.replace('.', ' .')
+        word = word.replace(',', ' ,')
+        word = word.replace("'", "")
+
         #if word.startswith('@'): # this misses "@dudebro: (quote included)
         if re.match(r'[^A-Za-z0-9]*@', word):
             #word = 'GENERICUSER' #all other words are lowercase
