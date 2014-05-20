@@ -11,6 +11,7 @@ from cpu.model.cost import CrossEntropy
 import cpu.optimize.data_provider
 import random
 import operator
+from collections import defaultdict
 
 data_dir = "../data"
 visual_dir = "../visualisations"
@@ -168,51 +169,72 @@ def print_visualisation(X, Y_hat, Y_inverted, delta, output_file):
     #DONE
 
 def extract_lexicon(X, Y_hat, Y_inverted, delta):
-    positive_val = dict()
-    positive_count = dict()
-    negative_val = dict()
-    negative_count = dict()
+    positive= defaultdict(lambda: 0)
+    negative = defaultdict(lambda: 0)
 
     abs_delta = np.absolute(delta)
     abs_delta = np.sqrt(abs_delta)
 
+
     for i in xrange(len(X)):
+        min = np.min(abs_delta[i])
+        max = np.max(abs_delta[i])
+        windows_size = (max-min)/5 #defining 5 levels of importance
+
         for j in xrange(len(X[i])):
+            if len(X[i][j])<3:
+                break
+
+            # #The ones that make it to the top windows
+            # if abs_delta[i][j] > min+(windows_size*3):
+            #     if Y_inverted[i][0]==1:
+            #         delta[i][j]=-delta[i][j]
+            #     if delta[i][j]>0:
+            #         positive[X[i][j]]+=1
+            #     else:
+            #         negative[X[i][j]]+=1
+
+
+
+            #The highest avarage
             if Y_inverted[i][0]==1:
                 delta[i][j]=-delta[i][j]
             if delta[i][j]>0:
-                if positive_val.get(X[i][j])!=None:
-                    positive_val[X[i][j]] = positive_val[X[i][j]] + delta[i][j]
-                    positive_count[X[i][j]] += 1
+                if positive.get(X[i][j])!=None:
+                    (val, count)=positive[X[i][j]]
+                    val = val+delta[i][j]
+                    count += 1
+                    positive[X[i][j]]=(val,count)
                 else:
-                    positive_val[X[i][j]] = delta[i][j]
-                    positive_count[X[i][j]] = 1
+                    positive[X[i][j]] = (delta[i][j],1)
 
             else:
-                if negative_val.get(X[i][j])!=None:
-                    negative_val[X[i][j]] = negative_val[X[i][j]] + delta[i][j]
-                    negative_count[X[i][j]] += 1
+                if negative.get(X[i][j])!=None:
+                    (val, count)=negative[X[i][j]]
+                    val = val+delta[i][j]
+                    count += 1
+                    negative[X[i][j]]=(val,count)
                 else:
-                    negative_val[X[i][j]] = delta[i][j]
-                    negative_count[X[i][j]] = 1
+                    negative[X[i][j]] = (delta[i][j],1)
 
-    for word in positive_val:
-        positive_val[word]=positive_val[word]/positive_count[word]
+    for word in positive:
+        (val, count)=positive[word]
+        val = val/count
+        positive[word]=(val,0)
 
-    for word in negative_val:
-        negative_val[word]=negative_val[word]/negative_count[word]
+    for word in negative:
+        (val, count)=negative[word]
+        val = val/count
+        negative[word]=(val,0)
 
-    positive_val = sorted(positive_val.items(), key=operator.itemgetter(1), reverse=True)
-    negative_val = sorted(negative_val.items(), key=operator.itemgetter(1), reverse=True)
-
-    positive_count = sorted(positive_count.items(), key=operator.itemgetter(1), reverse=True)
-    negative_count = sorted(negative_count.items(), key=operator.itemgetter(1), reverse=True)
+    positive = sorted(positive.items(), key=operator.itemgetter(1), reverse=True)
+    negative = sorted(negative.items(), key=operator.itemgetter(1), reverse=True)
 
     for i in xrange(0,19):
-        print positive_val[i]
+        print positive[i]
     print '-------------------'
     for i in xrange(0,19):
-        print negative_val[i]
+        print negative[i]
 
 if __name__ == "__main__":
     run()
