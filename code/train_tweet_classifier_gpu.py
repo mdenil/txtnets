@@ -53,6 +53,11 @@ def run():
     with open(os.path.join(tweets_dir, "sentiment140.train.clean.dictionary.encoding.json")) as alphabet_file:
         alphabet = json.loads(alphabet_file.read())
 
+    with open(os.path.join(tweets_dir, "sentiment140.test.clean.json")) as data_file:
+        data = json.loads(data_file.read())
+        X_test, Y_test = map(list, zip(*data))
+        Y_test = [[":)", ":("].index(y) for y in Y_test]
+
     print len(alphabet)
 
     # X = X[:1000]
@@ -66,20 +71,26 @@ def run():
         new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
     X = new_X
 
+    new_X_test = []
+    for x in X_test:
+        new_X_test.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
+    X_test = new_X_test
+
+    batch_size = 50
+
     train_data_provider = LabelledSequenceMinibatchProvider(
-        X=X[:-500],
-        Y=Y[:-500],
-        batch_size=50,
+        X=X,
+        Y=Y,
+        batch_size=batch_size,
         fixed_length=50,
         padding='PADDING')
 
     print train_data_provider.batches_per_epoch
 
-    n_validation = 500
-    validation_data_provider = LabelledSequenceMinibatchProvider(
-        X=X[-n_validation:],
-        Y=Y[-n_validation:],
-        batch_size=n_validation,
+    test_data_provider = LabelledSequenceMinibatchProvider(
+        X=X_test,
+        Y=Y_test,
+        batch_size=len(X_test),
         fixed_length=50,
         padding='PADDING',
         shuffle=False)
@@ -170,18 +181,18 @@ def run():
             DictionaryEncoding(vocabulary=alphabet),
 
             WordEmbedding(
-                dimension=12,
+                dimension=20,
                 vocabulary_size=len(alphabet),
                 padding=alphabet['PADDING']),
 
             SentenceConvolution(
                 n_feature_maps=10,
-                kernel_width=3,
+                kernel_width=5,
                 n_channels=1,
-                n_input_dimensions=12),
+                n_input_dimensions=20),
 
             Bias(
-                n_input_dims=12,
+                n_input_dims=20,
                 n_feature_maps=10),
 
             SumFolding(),
@@ -194,10 +205,10 @@ def run():
                 n_feature_maps=14,
                 kernel_width=3,
                 n_channels=10,
-                n_input_dimensions=6),
+                n_input_dimensions=10),
 
             Bias(
-                n_input_dims=6,
+                n_input_dims=10,
                 n_feature_maps=14),
 
             SumFolding(),
@@ -208,7 +219,7 @@ def run():
 
             Softmax(
                 n_classes=2,
-                n_input_dimensions=168),
+                n_input_dimensions=280),
             ]
     )
 
@@ -266,7 +277,7 @@ def run():
 
     cost_function = CrossEntropy()
 
-    regularizer = L2Regularizer(lamb=1e-5)
+    regularizer = L2Regularizer(lamb=1.2e-4)
 
     objective = CostMinimizationObjective(
         cost=cost_function,
@@ -290,7 +301,7 @@ def run():
     gradient_checker = ModelGradientChecker(
         CostMinimizationObjective(
             cost=cost_function,
-            data_provider=validation_data_provider,
+            data_provider=test_data_provider,
             regularizer=regularizer))
 
     time_start = time.time()
@@ -301,18 +312,22 @@ def run():
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        if batch_index % 30 == 0:
-            X_valid, Y_valid, meta_valid = validation_data_provider.next_batch()
+        if batch_index % 50 == 0:
+            X_valid, Y_valid, meta_valid = test_data_provider.next_batch()
 
             Y_hat = tweet_model.fprop(X_valid, meta=meta_valid)
 
             Y_hat = Y_hat.get()
-            assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
+            # assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
             # grad_check = gradient_checker.check(tweet_model)
             grad_check = "skipped"
 
             acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid.get(), axis=1))
+
+            time_now = time.time()
+
+            examples_per_hr = (batch_index * batch_size) / (time_now - time_start) * 3600
 
             if acc > best_acc:
                 best_acc = acc
@@ -322,18 +337,18 @@ def run():
                 #     pickle.dump(optimizer, model_file, protocol=-1)
 
 
-            print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, best acc: {}".format(
+            print "B: {}, A: {}, C: {}, EPH: {}, PS: {}, BA: {}".format(
                 batch_index,
                 acc, costs[-1],
-                np.argmax(Y_hat, axis=1).mean(),
+                int(examples_per_hr),
                 np.mean(np.abs(tweet_model.pack())),
                 best_acc)
 
         # if batch_index % 2500 == 0 and batch_index > 0:
         #     update_rule.gamma *= 0.5
 
-        if batch_index == 1000:
-            break
+        # if batch_index == 1000:
+        #     break
 
         # if batch_index % 100 == 0:
         #     with open("model.pkl", 'w') as model_file:

@@ -8,6 +8,8 @@ import random
 import simplejson as json
 import cPickle as pickle
 
+import generic.model.utils
+
 from gpu.model.model import CSM
 from gpu.model.encoding import DictionaryEncoding
 from gpu.model.embedding import WordEmbedding
@@ -28,6 +30,14 @@ from gpu.optimize.sgd import SGD
 from gpu.optimize.update_rule import AdaGrad
 from gpu.optimize.data_provider import PaddedParallelSequenceMinibatchProvider
 from generic.optimize.data_provider import TaggedProviderCollection
+
+
+def squared_distances(x, y):
+    x2 = np.sum(x**2, axis=1, keepdims=True)
+    y2 = np.sum(y**2, axis=1, keepdims=True)
+
+    # (x - y) (x - y)' = xx' - 2 xy' + yy'
+    return x2 + y2.T - 2*np.dot(x, y.T)
 
 
 def replace_unknowns(data, dictionary, unknown):
@@ -80,13 +90,17 @@ def run():
         ('en', 'de'): parallel_en_de_provider
     })
 
+    X_en_valid, meta_en_valid, X_de_valid, meta_de_valid = parallel_en_de_provider.next_batch()
+
+
     english_model = CSM(
         layers=[
             DictionaryEncoding(vocabulary=english_dictionary),
 
             WordEmbedding(
                 dimension=40,
-                vocabulary_size=len(english_dictionary)),
+                vocabulary_size=len(english_dictionary),
+                padding=english_dictionary['PADDING']),
 
             AxisReduction(axis='w'),
 
@@ -114,7 +128,8 @@ def run():
 
             WordEmbedding(
                 dimension=40,
-                vocabulary_size=len(german_dictionary)),
+                vocabulary_size=len(german_dictionary),
+                padding=german_dictionary['PADDING']),
 
             AxisReduction(axis='w'),
 
@@ -173,15 +188,38 @@ def run():
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        # print costs[-1]
+        if batch_index % 100 == 0:
+            m_en = generic.model.utils.ModelEvaluator(
+                model.get_model('en'),
+                desired_axes=('b', ('d', 'f', 'w')))
+            m_de = generic.model.utils.ModelEvaluator(
+                model.get_model('de'),
+                desired_axes=('b', ('d', 'f', 'w')))
 
-        if batch_index % 10 == 0:
-            print "B: {}, E: {}, C: {}, Param size: {}".format(
+            Y_en_valid = m_en.fprop(X_en_valid, meta_en_valid).get()
+            Y_de_valid = m_de.fprop(X_de_valid, meta_de_valid).get()
+
+            Y_sqd = squared_distances(Y_en_valid, Y_de_valid)
+            correct = np.sum(np.diag(Y_sqd))
+            incorrect = np.sum(Y_sqd) - correct
+
+            # print correct,  incorrect
+
+            time_now = time.time()
+            examples_per_hr = (batch_index * batch_size) / (time_now - time_start) * 3600
+
+
+            print "B: {}, E: {}, C: {}, I: {}, EPH: {}, PS: {}".format(
                 batch_index,
                 # This epoch count will be inaccurate when I move to multilingual
                 (batch_index // parallel_en_de_provider.batches_per_epoch) + 1,
-                costs[-1],
+                correct,
+                incorrect,
+                examples_per_hr,
                 np.mean(np.abs(model.pack())))
+
+        # if batch_index == 100:
+        #     break
 
         if batch_index % 100 == 0:
             with open("model.pkl", 'w') as model_file:
