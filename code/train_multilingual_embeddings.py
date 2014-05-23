@@ -26,7 +26,7 @@ from gpu.model.model import TaggedModelCollection
 from gpu.optimize.objective import ContrastiveMultilingualEmbeddingObjective
 
 from gpu.optimize.sgd import SGD
-# from gpu.optimize.regularizer import L2Regularizer
+from gpu.optimize.regularizer import L2Regularizer
 from gpu.optimize.update_rule import AdaGrad
 from gpu.optimize.data_provider import PaddedParallelSequenceMinibatchProvider
 from generic.optimize.data_provider import TaggedProviderCollection
@@ -74,7 +74,7 @@ def run():
     english_data = replace_unknowns(english_data, english_dictionary, 'UNKNOWN')
     german_data = replace_unknowns(german_data, german_dictionary, 'UNKNOWN')
 
-    batch_size = 100
+    batch_size = 50
 
     assert len(english_data) == len(german_data)
     print len(english_data) / batch_size
@@ -160,21 +160,18 @@ def run():
         'de': german_model,
     })
 
-    # regularizer = L2Regularizer(lamb=1e-4)
+    regularizer = L2Regularizer(lamb=1e0)
 
     objective = ContrastiveMultilingualEmbeddingObjective(
         tagged_parallel_sequence_provider=multilingual_parallel_provider,
-        n_contrastive_samples=10,
-        margin=40.0)
+        n_contrastive_samples=50,
+        margin=40.0,
+        regularizer=regularizer)
 
-    # objective = CostMinimizationObjective(
-    #     cost=cost_function,
-    #     data_provider=train_data_provider,
-    #     regularizer=regularizer)
 
     update_rule = AdaGrad(
-        # gamma=0.01,
-        gamma=0.1,
+        # gamma=0.1,
+        gamma=0.05,
         model_template=model)
 
     optimizer = SGD(
@@ -184,11 +181,11 @@ def run():
 
     time_start = time.time()
 
-    costs = []
+    losses = []
     for batch_index, iteration_info in enumerate(optimizer):
-        costs.append(iteration_info['cost'])
+        losses.append(iteration_info['cost'])
 
-        if batch_index % 100 == 0:
+        if batch_index % 50 == 0:
             m_en = generic.model.utils.ModelEvaluator(
                 model.get_model('en'),
                 desired_axes=('b', ('d', 'f', 'w')))
@@ -203,18 +200,23 @@ def run():
             correct = np.sum(np.diag(Y_sqd))
             incorrect = np.sum(Y_sqd) - correct
 
+            correct /= Y_sqd.shape[0]
+            incorrect /= Y_sqd.size - Y_sqd.shape[0]
+
             # print correct,  incorrect
 
             time_now = time.time()
             examples_per_hr = (batch_index * batch_size) / (time_now - time_start) * 3600
 
 
-            print "B: {}, E: {}, C: {}, I: {}, EPH: {}, PS: {}".format(
+            print "B: {}, E: {}, L: {}, C: {}, I: {}, I-C: {}, EPH: {}, PS: {}".format(
                 batch_index,
                 # This epoch count will be inaccurate when I move to multilingual
                 (batch_index // parallel_en_de_provider.batches_per_epoch) + 1,
+                losses[-1],
                 correct,
                 incorrect,
+                incorrect - correct,
                 examples_per_hr,
                 np.mean(np.abs(model.pack())))
 

@@ -48,10 +48,12 @@ class ContrastiveMultilingualEmbeddingObjective(object):
     def __init__(self,
                  tagged_parallel_sequence_provider,
                  n_contrastive_samples,
-                 margin):
+                 margin,
+                 regularizer=None):
         self.tagged_parallel_sequence_provider = tagged_parallel_sequence_provider
         self.n_contrastive_samples = n_contrastive_samples
         self.margin = margin
+        self.regularizer = regularizer
 
     def evaluate(self, tagged_model_collection):
         t1, t2 = random.choice(self.tagged_parallel_sequence_provider.tags)
@@ -78,8 +80,7 @@ class ContrastiveMultilingualEmbeddingObjective(object):
         y1_clean = m1.fprop(x1_clean, meta1_clean)
         y2_clean = m2.fprop(x2_clean, meta2_clean)
 
-        # energy and denerngy are specific
-        # e_clean = energy_function.fprop(y1_clean, y2_clean)
+        e_clean = energy_function.fprop(y1_clean, y2_clean)
 
         for _ in xrange(self.n_contrastive_samples):
             # new state containers
@@ -95,7 +96,7 @@ class ContrastiveMultilingualEmbeddingObjective(object):
             x2_noise, meta2_noise['lengths'] = _parallel_shuffle_lists(x2_clean, meta2_clean['lengths'])
             y2_noise = m2_noise.fprop(x2_noise, meta2_noise)
 
-            e_clean = energy_function.fprop(y1_clean, y2_clean)
+            # e_clean = energy_function.fprop(y1_clean, y2_clean)
             e_noise = energy_function.fprop(y1_noise, y2_noise)
 
             loss = loss_function.fprop(e_clean, e_noise)
@@ -119,6 +120,17 @@ class ContrastiveMultilingualEmbeddingObjective(object):
             for g, g_clean, g_noise in zip(grads_2_total, grads_2_clean, grads_2_noise):
                 g += g_clean
                 g += g_noise
+
+        if self.regularizer:
+            m = tagged_model_collection.get_model(t1)
+            total_loss += self.regularizer.cost(m)
+            for g, rg in zip(grads_1_total, self.regularizer.grads(m)):
+                g += rg
+
+            m = tagged_model_collection.get_model(t2)
+            total_loss += self.regularizer.cost(m)
+            for g, rg in zip(grads_2_total, self.regularizer.grads(m)):
+                g += rg
 
         full_grads = tagged_model_collection.full_grads_from_tagged_grads({
             t1: grads_1_total,
