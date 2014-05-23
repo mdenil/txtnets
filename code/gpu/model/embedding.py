@@ -9,6 +9,8 @@ import generic.model.embedding
 import pycuda.autoinit
 import pycuda.compiler
 
+import gpu.allocator
+
 
 _embedding_module = pycuda.compiler.SourceModule("""
 __global__ void fprop_kernel(float* E, int* X, int B, int D, int W, int V, float* out)
@@ -57,7 +59,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
         b, _, w = X.shape
         d, v = self.E.shape
 
-        out = pycuda.gpuarray.empty((b, d, w), dtype=np.float32)
+        out = pycuda.gpuarray.empty((b, d, w), dtype=np.float32, allocator=gpu.allocator.global_device_allocator)
 
         # kernel blocks are formatted to have one thread per element of X
         # each thread loops over d.
@@ -94,7 +96,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
         return delta
 
     def _grads(self, delta, X):
-        grad_E = pycuda.gpuarray.zeros_like(self.E)
+        grad_E = pycuda.gpuarray.zeros(self.E.shape, dtype=np.float32, allocator=gpu.allocator.global_device_allocator)
 
         b, _, w = X.shape
         d, v = self.E.shape

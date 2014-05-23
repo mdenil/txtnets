@@ -5,6 +5,7 @@ import numpy as np
 import pycuda.autoinit
 import pycuda.gpuarray
 import pycuda.compiler
+import gpu.allocator
 
 __all__ = ['sum_along_axis']
 
@@ -39,8 +40,7 @@ __global__ void sum_along_axis_kernel(
 """)
 
 sum_along_axis_kernel = _sum_along_axis_module.get_function("sum_along_axis_kernel")
-memory_pool = pycuda.tools.DeviceMemoryPool()
-
+memory_pool = gpu.allocator.global_device_pool
 
 def sum_along_axis(x, axis):
     x_shape = x.shape

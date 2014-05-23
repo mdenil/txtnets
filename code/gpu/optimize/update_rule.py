@@ -1,9 +1,8 @@
 __author__ = 'mdenil'
 
 import numpy as np
-import pycuda.autoinit
-import pycuda
-
+import gpu.allocator
+import pycuda.gpuarray
 import generic.optimize.update_rule as generic_rule
 
 
@@ -12,7 +11,7 @@ class GPUUpdateRuleUtilityMixin(object):
         if isinstance(x, pycuda.gpuarray.GPUArray):
             return pycuda.gpuarray.zeros_like(x)
         else:
-            return np.zeros_like(x)
+            return np.zeros_like(x, allocator=gpu.allocator.global_device_allocator)
 
     def _sqrt(self, x):
         if isinstance(x, pycuda.gpuarray.GPUArray):

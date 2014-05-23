@@ -8,6 +8,7 @@ import pycuda.gpuarray
 import pycuda.compiler
 
 import gpu.space
+import gpu.allocator
 
 import scikits.cuda.linalg
 
@@ -18,7 +19,7 @@ __all__ = ["ContrastiveMultilingualEmbeddingObjective"]
 
 class GaussianEnergy(object):
     def fprop(self, x, y):
-        ones = pycuda.gpuarray.zeros((x.shape[1], 1), dtype=x.dtype)
+        ones = pycuda.gpuarray.empty((x.shape[1], 1), dtype=x.dtype, allocator=gpu.allocator.global_device_allocator)
         ones.fill(1.0)
         return 0.5 * scikits.cuda.linalg.dot((x - y)**2, ones)
 
@@ -62,7 +63,10 @@ class ContrastiveHingeLoss(object):
         self.__acquire_device_kernels()
 
     def fprop(self, x_clean, x_noise):
-        out = pycuda.gpuarray.empty_like(x_clean)
+        out = pycuda.gpuarray.empty(
+            x_clean.shape,
+            dtype=x_clean.dtype,
+            allocator=gpu.allocator.global_device_allocator)
 
         elements_per_block = self.__class__.block_size
         num_blocks = out.size // elements_per_block + 1
@@ -81,7 +85,10 @@ class ContrastiveHingeLoss(object):
         return pycuda.gpuarray.sum(out)
 
     def bprop(self, x_clean, x_noise, delta):
-        out = pycuda.gpuarray.empty_like(x_clean)
+        out = pycuda.gpuarray.empty(
+            x_clean.shape,
+            dtype=x_clean.dtype,
+            allocator=gpu.allocator.global_device_allocator)
 
         elements_per_block = self.__class__.block_size
         num_blocks = x_clean.size // elements_per_block + 1
@@ -122,4 +129,7 @@ class ContrastiveMultilingualEmbeddingObjective(
     LossFunction = ContrastiveHingeLoss
 
     def _zeros_like(self, x):
-        return pycuda.gpuarray.zeros_like(x)
+        return pycuda.gpuarray.zeros(
+            x.shape,
+            dtype=x.dtype,
+            allocator=gpu.allocator.global_device_allocator)

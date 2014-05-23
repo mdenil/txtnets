@@ -5,6 +5,7 @@ import numpy as np
 import generic.model.pooling
 
 import gpu.model.layer
+import gpu.allocator
 
 import pycuda.gpuarray
 import pycuda.compiler
@@ -80,7 +81,7 @@ class MaxFolding(generic.model.pooling.MaxFolding, gpu.model.layer.Layer):
         self.__acquire_device_kernels()
 
     def _fprop(self, X):
-        out = pycuda.gpuarray.empty((X.shape[0] // 2, X.shape[1]), dtype=np.float32)
+        out = pycuda.gpuarray.empty((X.shape[0] // 2, X.shape[1]), dtype=np.float32, allocator=gpu.allocator.global_device_allocator)
         switches = pycuda.gpuarray.empty_like(X)
 
         # TODO: clean up this calculation

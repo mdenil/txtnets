@@ -11,7 +11,10 @@ import pycuda.tools
 import reikna.cluda
 import reikna.algorithms
 
+import gpu.allocator
+
 import scikits.cuda.linalg
+
 scikits.cuda.linalg.init()
 
 # I don't really understand the implications of making these module level instead of class level.  I think it will
@@ -26,7 +29,7 @@ import gpu._utils.sum_along_axis
 
 
 def cpu_to_gpu(X):
-    return pycuda.gpuarray.to_gpu(X)
+    return pycuda.gpuarray.to_gpu(X, allocator=gpu.allocator.global_device_allocator)
 
 
 def gpu_to_cpu(X):
@@ -75,7 +78,7 @@ def fliplr(x):
 
     return y
 
-fliplr.memory_pool = pycuda.tools.DeviceMemoryPool()
+fliplr.memory_pool = gpu.allocator.global_device_pool
 fliplr.fliplr_kernel = _fliplr_module.get_function("fliplr_kernel")
 
 
@@ -128,8 +131,7 @@ def transpose(X, axes):
         apply_transpose = reikna.algorithms.Transpose(X, axes).compile(cuda_thread)
         transpose.compiled_cache[key] = apply_transpose
 
-    # TODO: allow out to be passed as a parameter to avoid reallocation
-    out = pycuda.gpuarray.empty(apply_transpose.parameter.output.shape, X.dtype)
+    out = pycuda.gpuarray.empty(apply_transpose.parameter.output.shape, X.dtype, allocator=gpu.allocator.global_device_allocator)
 
     apply_transpose(out, X)
     return out
@@ -169,14 +171,11 @@ def broadcast(x, expanded_shape, out=None, block_size=512):
 
     rank = len(expanded_shape)
 
-    try:
-        x_shape, x_stride, y_shape, y_stride = broadcast._shape_cache[rank]
-    except KeyError:
-        x_shape = pycuda.gpuarray.empty(rank, dtype=np.int32)
-        x_stride = pycuda.gpuarray.empty(rank, dtype=np.int32)
-        y_shape = pycuda.gpuarray.empty(rank, dtype=np.int32)
-        y_stride = pycuda.gpuarray.empty(rank, dtype=np.int32)
-        broadcast._shape_cache[rank] = x_shape, x_stride, y_shape, y_stride
+    # FIXME: pass shapes in a more efficient way
+    x_shape = pycuda.gpuarray.empty(rank, dtype=np.int32, allocator=gpu.allocator.global_device_allocator)
+    x_stride = pycuda.gpuarray.empty(rank, dtype=np.int32, allocator=gpu.allocator.global_device_allocator)
+    y_shape = pycuda.gpuarray.empty(rank, dtype=np.int32, allocator=gpu.allocator.global_device_allocator)
+    y_stride = pycuda.gpuarray.empty(rank, dtype=np.int32, allocator=gpu.allocator.global_device_allocator)
 
     x_shape.set(np.asarray(x.shape, dtype=np.int32))
     x_stride.set(np.asarray(x.strides, dtype=np.int32))
