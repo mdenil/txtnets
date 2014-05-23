@@ -1,10 +1,8 @@
 __author__ = 'mdenil'
 
 
-# No! Numpy is not allowed in here >:|
-# import numpy as np
+import numpy as np # for np.prod
 import operator
-# from collections import OrderedDict
 
 
 class Space(object):
@@ -297,13 +295,7 @@ class Space(object):
         Axes not in the space will return an extent of 1.  This includes axes within an unfolded axis. i.e.
         you can ask for the extent of 'a' in ('b', 'c') and it will equal 1.
         """
-        axis = _canonical_axes_description(axis)
-
-        def prod(xs):
-            # special case to make empty sequence = 1
-            return reduce(operator.mul, xs) if xs else 1
-
-        return prod([self._extents[ax] for ax in _protect_axis(axis) if ax in self._extents])
+        return _prod(self._extents.get(ax, 1) for ax in _protect_axis(axis))
 
     def get_extents(self, axes):
         return map(self.get_extent, _canonical_axes_description(axes))
@@ -349,3 +341,7 @@ def _protect_axis(axis):
         return axis,
     else:
         return axis
+
+
+def _prod(xs):
+    return reduce(operator.mul, xs)

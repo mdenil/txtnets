@@ -1,6 +1,5 @@
 __author__ = 'mdenil'
 
-
 import numpy as np
 import os
 import time
@@ -15,23 +14,19 @@ from gpu.model.embedding import WordEmbedding
 from gpu.model.transfer import SentenceConvolution
 from gpu.model.transfer import Bias
 from gpu.model.pooling import SumFolding
-from gpu.model.pooling import MaxFolding
 from gpu.model.pooling import KMaxPooling
 from gpu.model.nonlinearity import Tanh
 from gpu.model.transfer import Softmax
 
+
 # It might be nice to keep the word embedding dictionaries on the host, they're kind of big
-from gpu.model.transport import HostToDevice
-import cpu.model.encoding
-import cpu.model.embedding
 
 from gpu.model.cost import CrossEntropy
 
 from gpu.optimize.sgd import SGD
-from gpu.optimize.objective import CostMinimizationObjective
+from gpu.optimize.objective.cost_minimization import CostMinimizationObjective
 from gpu.optimize.regularizer import L2Regularizer
 from gpu.optimize.update_rule import AdaGrad
-from gpu.optimize.update_rule import AdaDelta
 from gpu.optimize.data_provider import LabelledSequenceMinibatchProvider
 
 from cpu.optimize.grad_check import ModelGradientChecker

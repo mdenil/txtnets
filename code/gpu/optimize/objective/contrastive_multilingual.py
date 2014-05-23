@@ -1,25 +1,22 @@
 __author__ = 'mdenil'
 
 import numpy as np
-
-import generic.optimize.objective
-
-import gpu.space
+import generic.optimize.objective.contrastive_multilingual
 
 import pycuda.autoinit
 import pycuda.gpuarray
 import pycuda.compiler
+
+import gpu.space
+
 import scikits.cuda.linalg
 
 scikits.cuda.linalg.init()
 
-
-from generic.optimize.objective import CostMinimizationObjective
-
-###########
+__all__ = ["ContrastiveMultilingualEmbeddingObjective"]
 
 
-class _GaussianEnergy(object):
+class GaussianEnergy(object):
     def fprop(self, x, y):
         ones = pycuda.gpuarray.zeros((x.shape[1], 1), dtype=x.dtype)
         ones.fill(1.0)
@@ -35,39 +32,29 @@ class _GaussianEnergy(object):
 
 
 _contrastive_hinge_loss_module = pycuda.compiler.SourceModule("""
-// modifies x in place
-__global__ void fprop_kernel(float* x, int N)
+__global__ void fprop_kernel(float* x_clean, float* x_noise, float margin, int N, float* out)
 {
     const int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (thread_id < N) {
-        const float v = x[thread_id];
-        x[thread_id] = v * (float)(v > 0.0f);
+    for (int i = thread_id; i < N; i += blockDim.x * gridDim.x) {
+        float v = margin + x_clean[i] - x_noise[i];
+        out[i] = v * (float)(v > 0.0f) / N;
     }
 }
 
-__global__ void bprop_kernel(
-    float* x_clean,
-    float* out_clean,
-    float* x_noise,
-    float* out_noise,
-    int N,
-    float margin,
-    float scale)
+// computes delta_clean.  delta_dirty = -delta_clean
+__global__ void bprop_kernel(float* x_clean, float* x_noise, float margin, int N, float delta, float* out)
 {
     const int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (thread_id < N) {
-        float delta = (float)(margin + x_clean[thread_id] - x_noise[thread_id] > 0.0f);
-        delta /= scale;
-        out_clean[thread_id] = delta * x_clean[thread_id];
-        out_noise[thread_id] = delta * -x_noise[thread_id];
+    for (int i = thread_id; i < N; i += blockDim.x * gridDim.x) {
+        out[i] = delta / N * (float)(margin + x_clean[i] - x_noise[i] > 0.0f);
     }
 }
 """)
 
 
-class _ContrastiveHingeLoss(object):
+class ContrastiveHingeLoss(object):
     block_size = 512
 
     def __init__(self, margin):
@@ -75,7 +62,7 @@ class _ContrastiveHingeLoss(object):
         self.__acquire_device_kernels()
 
     def fprop(self, x_clean, x_noise):
-        out = self.margin + x_clean - x_noise
+        out = pycuda.gpuarray.empty_like(x_clean)
 
         elements_per_block = self.__class__.block_size
         num_blocks = out.size // elements_per_block + 1
@@ -83,16 +70,18 @@ class _ContrastiveHingeLoss(object):
         grid = (num_blocks, 1)
 
         self._fprop_kernel(
-            out,
+            x_clean,
+            x_noise,
+            np.float32(self.margin),
             np.int32(out.size),
+            out,
             block=block,
             grid=grid)
 
-        return out
+        return pycuda.gpuarray.sum(out)
 
-    def bprop(self, x_clean, x_noise):
-        out_clean = pycuda.gpuarray.empty_like(x_clean)
-        out_noise = pycuda.gpuarray.empty_like(x_noise)
+    def bprop(self, x_clean, x_noise, delta):
+        out = pycuda.gpuarray.empty_like(x_clean)
 
         elements_per_block = self.__class__.block_size
         num_blocks = x_clean.size // elements_per_block + 1
@@ -101,16 +90,15 @@ class _ContrastiveHingeLoss(object):
 
         self._bprop_kernel(
             x_clean,
-            out_clean,
             x_noise,
-            out_noise,
-            np.int32(x_clean.size),
             np.float32(self.margin),
-            np.float32(x_clean.shape[0]),
+            np.int32(x_clean.size),
+            np.float32(delta),
+            out,
             block=block,
             grid=grid)
 
-        return out_clean, out_noise
+        return out, -out
 
     def __acquire_device_kernels(self):
         self._fprop_kernel = _contrastive_hinge_loss_module.get_function("fprop_kernel")
@@ -128,13 +116,10 @@ class _ContrastiveHingeLoss(object):
 
 
 class ContrastiveMultilingualEmbeddingObjective(
-        generic.optimize.objective.ContrastiveMultilingualEmbeddingObjective):
+        generic.optimize.objective.contrastive_multilingual.ContrastiveMultilingualEmbeddingObjective):
 
-    Energy = _GaussianEnergy
-    LossFunction = _ContrastiveHingeLoss
+    Energy = GaussianEnergy
+    LossFunction = ContrastiveHingeLoss
 
     def _zeros_like(self, x):
         return pycuda.gpuarray.zeros_like(x)
-
-    def _mean(self, x):
-        return pycuda.gpuarray.sum(x) / float(x.size)
