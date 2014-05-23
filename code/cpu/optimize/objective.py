@@ -16,8 +16,8 @@ class _GaussianEnergy(object):
         return 0.5 * np.sum((x - y)**2, axis=1, keepdims=True)
 
     def bprop(self, x, y, delta):
-        delta_x = delta * x
-        delta_y = delta * y
+        delta_x = delta * (x - y)
+        delta_y = delta * (y - x)
         return delta_x, delta_y
 
 

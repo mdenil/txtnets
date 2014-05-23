@@ -29,8 +29,8 @@ class _GaussianEnergy(object):
         delta_space = gpu.space.GPUSpace.infer(delta, ('b', 'd'))
         delta, delta_space = delta_space.broadcast(delta, d=x.shape[1])
 
-        delta_x = delta * x
-        delta_y = delta * y
+        delta_x = delta * (x - y)
+        delta_y = delta * (y - x)
         return delta_x, delta_y
 
 
