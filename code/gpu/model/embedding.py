@@ -9,42 +9,32 @@ import generic.model.embedding
 import pycuda.autoinit
 import pycuda.compiler
 
+
 _embedding_module = pycuda.compiler.SourceModule("""
-__global__ void fprop_kernel(float* E, int e_n, int e_m, int* X, int x_n, float* out)
+__global__ void fprop_kernel(float* E, int* X, int B, int D, int W, int V, float* out)
 {
-    const int i = blockIdx.x * blockDim.x + threadIdx.x;
-    const int j = blockIdx.y * blockDim.y + threadIdx.y;
+    const int b = blockIdx.x * blockDim.x + threadIdx.x;
+    const int w = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (i < x_n && j < e_m) {
-        out[i * e_m + j] = E[X[i] * e_m + j];
-    }
-}
-
-// one thread per row
-__global__ void bprop_kernel(float* delta, float* Y, int N, int M, float* out)
-{
-    const int row = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (row < N) {
-        out[row] = 0.0f;
-
-        for (int j = 0; j < M; ++j) {
-            out[row] += delta[row * M + j] * Y[row * M + j];
+    if (b < B && w < W) {
+        for (int d = 0; d < D; ++d) {
+            out[b*D*W + d*W + w] = E[d*V + X[b*W + w]];
         }
     }
 }
 
-__global__ void grads_kernel(float* delta, int N, int M, int* X, float* out, int padding_row)
+__global__ void grads_kernel(float* delta, int* X, int B, int D, int W, int V, float* out, int v_padding)
 {
-    // out needs to be zeroed before this kernel is called
+    const int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    const int row = blockIdx.x * blockDim.x + threadIdx.x;
-    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    const int b = thread_id / (D * W);
+    const int d = (thread_id % (D * W)) / W;
+    const int w = thread_id % W;
 
-    if (row < N && col < M) {
-        if (X[row] != padding_row) {
-            // use an atomic op because multiple Xs can index the same row of out
-            atomicAdd(out + X[row] * M + col, delta[row * M + col]);
+    if (b < B && d < D && w < W) {
+        int v = X[b*W + w];
+        if (v != v_padding) {
+            atomicAdd(out + d*V + v, delta[b*D*W + d*W + w]);
         }
     }
 }
@@ -60,68 +50,79 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
         self.__acquire_device_kernels()
 
     def _fprop(self, X):
-        out = pycuda.gpuarray.empty((X.size, self.E.shape[1]), dtype=np.float32)
+        # X is formatted as b, d=1, w
+        # out is b, d, w
+        # E is d, vocab_size
 
-        rows_per_block = self.__class__.block_size // self.E.shape[1] + 1
-        num_blocks = self.E.shape[0] // rows_per_block + 1
+        b, _, w = X.shape
+        d, v = self.E.shape
+
+        out = pycuda.gpuarray.empty((b, d, w), dtype=np.float32)
+
+        # kernel blocks are formatted to have one thread per element of X
+        # each thread loops over d.
+
+        if self.__class__.block_size >= w:
+            sentences_per_block = self.__class__.block_size // w
+            num_blocks = b // sentences_per_block + 1
+
+            block = (sentences_per_block, w, 1)
+            grid = (num_blocks, 1)
+        else:
+            blocks_per_sentence = w // self.__class__.block_size + 1
+            num_blocks = (b * blocks_per_sentence, 1)
+
+            block = (1, blocks_per_sentence, 1)
+            grid = num_blocks
 
         self._fprop_kernel(
             self.E,
-            np.int32(self.E.shape[0]),
-            np.int32(self.E.shape[1]),
             X,
-            np.int32(X.size),
+            np.int32(b),
+            np.int32(d),
+            np.int32(w),
+            np.int32(v),
             out,
-            block=(rows_per_block, self.E.shape[1], 1),
-            grid=(num_blocks, 1))
+            block=block,
+            grid=grid)
 
         return out
 
-    def _bprop(self, delta, Y):
-        out = pycuda.gpuarray.empty((Y.shape[0],), dtype=np.float32)
-
-        # this kernel uses one thread per row because it needs to accumulate
-        rows_per_block = self.__class__.block_size
-        num_blocks = delta.shape[0] // rows_per_block + 1
-
-        self._bprop_kernel(
-            delta,
-            Y,
-            np.int32(delta.shape[0]),
-            np.int32(delta.shape[1]),
-            out,
-            block=(rows_per_block, 1, 1),
-            grid=(num_blocks, 1))
-
-        return out
+    def _bprop(self, delta, Y, space):
+        delta *= Y
+        delta, _ = gpu.utils.sum_along_axis(delta, space, 'd')
+        return delta
 
     def _grads(self, delta, X):
         grad_E = pycuda.gpuarray.zeros_like(self.E)
 
-        rows_per_block = self.__class__.block_size // self.E.shape[1] + 1
-        num_blocks = self.E.shape[0] // rows_per_block + 1
+        b, _, w = X.shape
+        d, v = self.E.shape
+
+        block = (self.__class__.block_size, 1, 1)
+        grid = (delta.size // self.__class__.block_size + 1, 1)
 
         self._grads_kernel(
             delta,
-            np.int32(delta.shape[0]),
-            np.int32(delta.shape[1]),
             X,
+            np.int32(b),
+            np.int32(d),
+            np.int32(w),
+            np.int32(v),
             grad_E,
             np.int32(self.padding),
-            block=(rows_per_block, self.E.shape[1], 1),
-            grid=(num_blocks, 1))
+            block=block,
+            grid=grid)
 
         return [grad_E]
 
     def __acquire_device_kernels(self):
         self._fprop_kernel = _embedding_module.get_function("fprop_kernel")
-        self._bprop_kernel = _embedding_module.get_function("bprop_kernel")
         self._grads_kernel = _embedding_module.get_function("grads_kernel")
 
     def __getstate__(self):
         state = self.__dict__.copy()
         del state['_fprop_kernel']
-        del state['_bprop_kernel']
         del state['_grads_kernel']
         return state
 

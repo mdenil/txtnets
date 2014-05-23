@@ -29,6 +29,10 @@ class GenericCompareGPUToCPUTest(object):
         delta_gpu, meta_gpu = self.layer_gpu.bprop(delta_gpu, meta=dict(meta_gpu), fprop_state=fprop_state_gpu)
         delta_gpu, _ = meta_gpu['space_below'].transform(delta_gpu, self.X_gpu_space.axes)
 
+        print delta_cpu
+        print
+        print delta_gpu.get()
+
         self.assertEqual(delta_gpu.shape, delta_cpu.shape)
         self.assertLess(np.max(np.abs(delta_gpu.get() - delta_cpu)), 1e-5)
 

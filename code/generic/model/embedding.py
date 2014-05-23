@@ -13,17 +13,18 @@ class WordEmbedding(object):
         self.vocabulary_size = vocabulary_size
 
         if E is None:
-            self.E = 0.01 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
+            self.E = 0.01 * np.random.standard_normal(size=(self.dimension, self.vocabulary_size))
+            # self.E = 0.01 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
-            self.E[padding] = 0.0
+            self.E[:, padding] = 0.0
         else:
-            assert E.shape == (vocabulary_size, dimension)
+            assert E.shape == (dimension, vocabulary_size)
             self.E = E
 
     def fprop(self, X, meta):
-        X, X_space = meta['space_below'].transform(X, (('b', 'w'), 'd'))
+        X, X_space = meta['space_below'].transform(X, ('b', 'd', 'w'))
 
-        Y = self._fprop(X.ravel())
+        Y = self._fprop(X)
         Y_space = X_space.with_extents(d=self.dimension)
 
         fprop_state = {
@@ -46,10 +47,10 @@ class WordEmbedding(object):
 
         delta_space = meta['space_above']
 
-        delta, delta_space = delta_space.transform(delta, (('b', 'w'), 'd'))
-        Y, Y_space = Y_space.transform(Y, (('b', 'w'), 'd'))
+        delta, delta_space = delta_space.transform(delta, ('b', 'd', 'w'))
+        Y, Y_space = Y_space.transform(Y, ('b', 'd', 'w'))
 
-        delta = self._bprop(delta, Y)
+        delta = self._bprop(delta, Y, delta_space)
 
         delta_space = delta_space.without_axes('d')
 
@@ -62,8 +63,8 @@ class WordEmbedding(object):
         X = fprop_state['X']
         X_space = fprop_state['X_space']
 
-        delta, delta_space = delta_space.transform(delta, (('b', 'w'), 'd'))
-        X, X_space = X_space.transform(X, (('b', 'w'), 'd'))
+        delta, delta_space = delta_space.transform(delta, ('b', 'd', 'w'))
+        X, X_space = X_space.transform(X, ('b', 'd', 'w'))
 
         return self._grads(delta, X)
 

@@ -23,6 +23,7 @@ class WordEmbedding(GenericCompareGPUToCPUTest, unittest.TestCase):
             dimension=d,
             vocabulary_size=vocabulary_size,
             padding=0)
+        # self.layer_cpu.E = np.arange(self.layer_cpu.E.size).reshape(self.layer_cpu.E.shape).astype(np.float)
 
         self.layer_gpu = gpu.model.embedding.WordEmbedding(
             dimension=d,

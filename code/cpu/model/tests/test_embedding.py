@@ -23,7 +23,7 @@ class WordEmbedding(unittest.TestCase):
             vocabulary_size=vocabulary_size,
             padding=self.padding)
 
-        self.words = np.random.randint(vocabulary_size, size=(3,5))
+        self.words = np.random.randint(vocabulary_size, size=(3, 5))
 
         self.words_space = space.CPUSpace.infer(self.words, ('b', 'w'))
         self.meta = {
@@ -34,8 +34,9 @@ class WordEmbedding(unittest.TestCase):
 
     def test_fprop(self):
         actual, meta, fprop_state = self.layer.fprop(self.words, meta=self.meta)
-        actual, _ = meta['space_above'].transform(actual, (('b', 'w'), 'd'))
-        expected = self.layer.E[self.words.ravel()]
+        actual, _ = meta['space_above'].transform(actual, (('b', 'd'), 'w'))
+        expected = self.layer.E[:, self.words.squeeze()].transpose((1, 0, 2))
+        expected = expected.reshape((-1, expected.shape[-1]))
         assert np.allclose(actual, expected)
 
     def test_bprop(self):
@@ -45,7 +46,7 @@ class WordEmbedding(unittest.TestCase):
         def func(E):
             self.layer.E = E.reshape(self.layer.E.shape)
             # padding is always forced to be zero
-            self.layer.E[self.padding] = 0.0
+            self.layer.E[:, self.padding] = 0.0
 
             Y, _, _ = self.layer.fprop(self.words.copy(), meta=self.meta)
             c = Y.sum()
@@ -54,7 +55,7 @@ class WordEmbedding(unittest.TestCase):
         def grad(E):
             self.layer.E = E.reshape(self.layer.E.shape)
             # padding is always forced to be zero
-            self.layer.E[self.padding] = 0.0
+            self.layer.E[:, self.padding] = 0.0
 
             Y, meta, fprop_state = self.layer.fprop(self.words.copy(), meta=self.meta)
             delta = np.ones_like(Y)
@@ -62,5 +63,5 @@ class WordEmbedding(unittest.TestCase):
 
             return grad_E.ravel()
 
-
         assert scipy.optimize.check_grad(func, grad, self.layer.E.ravel()) < 1e-7
+

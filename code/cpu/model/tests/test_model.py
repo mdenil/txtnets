@@ -172,7 +172,7 @@ class Model(unittest.TestCase):
 
             return np.concatenate([g.ravel() for g in grads])
 
-        assert scipy.optimize.check_grad(func, grad, self.model.pack()) < 1e-5
+        self.assertLess(scipy.optimize.check_grad(func, grad, self.model.pack()), 1e-5)
 
 
     def test_pack_unpack(self):
