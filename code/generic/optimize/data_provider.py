@@ -1,3 +1,10 @@
+__author__ = 'albandemiraj'
+
+
+
+
+
+
 __author__ = 'mdenil'
 
 import numpy as np
@@ -199,3 +206,117 @@ class PaddedParallelSequenceMinibatchProvider(object):
 
     def _shuffle_data(self):
         random.shuffle(self.X)
+
+class LabelledDocumentMinibatchProvider(object):
+    def __init__(self, X, Y, batch_size, padding, shuffle=True, fixed_n_words=False, fixed_n_sentences=False):
+        self.X = X
+        self.Y = Y
+        self.batch_size = batch_size
+        self.padding = padding
+        self.fixed_n_words = fixed_n_words
+        self.fixed_n_sentences=fixed_n_sentences
+        self.shuffle = shuffle
+
+        self._batch_index = -1
+        self.batches_per_epoch = len(X) / batch_size
+
+    def next_batch(self):
+        self._prepare_for_next_batch()
+
+        batch_start = self._batch_index * self.batch_size
+        batch_end = batch_start + self.batch_size
+
+        X_batch = self.X[batch_start:batch_end]
+        Y_batch = self.Y[batch_start:batch_end]
+
+        Y_batch = np.equal.outer(Y_batch, np.arange(np.max(Y_batch)+1)).astype(np.float)
+
+        #Just making sure we have the right dimensions
+        dimension_b = len(X_batch)
+
+        #Splitting at .
+        new_X = []
+        for x in X_batch:
+            new_X.append(self.split(x))
+        X_batch=new_X
+
+        #Defining number of SENTENCES in a DOCUMENT
+        document_lengths = np.asarray(map(len, X_batch))
+
+        if self.fixed_n_sentences:
+            max_n_sentences = self.fixed_n_sentences
+            document_lengths = np.minimum(document_lengths, self.fixed_n_sentences)
+        else:
+            max_n_sentences = int(document_lengths.max())
+
+        #Padding or truncationg the number of SENTENCES
+        X_batch = [self._pad_or_truncate_document(x, max_n_sentences) for x in X_batch]
+
+        #NOW we have the information we need, so we can go back and work in 2d
+        X_batch = np.array(X_batch)
+        X_batch = X_batch.ravel()
+        X_batch = X_batch.tolist()
+
+        #Defining number of WORDS in a SENTENCE
+        sentence_lengths = np.asarray(map(len, X_batch))
+
+        if self.fixed_n_words:
+            max_n_words = self.fixed_n_words
+            sentence_lengths = np.minimum(sentence_lengths, self.fixed_n_words)
+        else:
+            max_n_words = int(sentence_lengths.max())
+
+        #Padding or truncationg the number of WORDS
+        X_batch = [self._pad_or_truncate_sentences(x, max_n_words) for x in X_batch]
+
+        meta = {
+            'lengths': sentence_lengths,
+            'lengths2': document_lengths,
+            'space_below': cpu.space.CPUSpace(
+                axes=[('b','s'), 'w'],
+                extents=OrderedDict([('b', dimension_b), ('s', max_n_sentences),('w', max_n_words)])),
+            'space_above': cpu.space.CPUSpace(
+                axes=[('b','s'), 'w'],
+                extents=OrderedDict([('b', dimension_b), ('s', max_n_sentences),('w', max_n_words)]))
+        }
+
+        return X_batch, Y_batch, meta
+
+    def _prepare_for_next_batch(self):
+        self._batch_index = (self._batch_index + 1) % self.batches_per_epoch
+
+        if self._batch_index == 0 and self.shuffle:
+            self._shuffle_data()
+
+    def _shuffle_data(self):
+        combined = zip(self.X, self.Y)
+        random.shuffle(combined)
+        self.X, self.Y = map(list, zip(*combined))
+
+    def _pad_or_truncate_sentences(self, x, max_length):
+        if max_length > len(x):
+            return x + [self.padding] * (max_length - len(x))
+        else:
+            return x[:max_length]
+
+    def _pad_or_truncate_document(self, x, max_length):
+        if max_length > len(x):
+            return x + [['PADDING']] * (max_length - len(x))
+        else:
+            return x[:max_length]
+
+    def split(self, x):
+        return self.do_split(x,[])
+
+    def do_split(self,x,y):
+        try:
+            index = x.index('.')
+            y.append(x[:index+1])
+            if index+1==len(x):
+                return y
+            else:
+                self
+                return self.do_split(x[index+1:],y)
+        except ValueError:
+            y.append(x)
+            return y
