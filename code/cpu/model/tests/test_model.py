@@ -7,6 +7,7 @@ import unittest
 from cpu import space
 
 import cpu.model.model
+import cpu.model.cost
 import cpu.model.pooling
 import cpu.model.transfer
 import cpu.model.nonlinearity
