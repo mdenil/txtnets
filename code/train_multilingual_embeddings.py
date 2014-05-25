@@ -1,30 +1,19 @@
 __author__ = 'mdenil'
 
-
 import numpy as np
 import os
 import time
-import random
 import simplejson as json
 import cPickle as pickle
+import argparse
 
 import generic.model.utils
-
 from gpu.model.model import CSM
 from gpu.model.encoding import DictionaryEncoding
 from gpu.model.embedding import WordEmbedding
-# from gpu.model.transfer import SentenceConvolution
-# from gpu.model.transfer import Bias
-# from gpu.model.pooling import SumFolding
-# from gpu.model.pooling import MaxFolding
-# from gpu.model.pooling import KMaxPooling
-# from gpu.model.nonlinearity import Tanh
-# from gpu.model.transfer import Softmax
 from gpu.model.transfer import AxisReduction
 from gpu.model.model import TaggedModelCollection
-
-from gpu.optimize.objective import ContrastiveMultilingualEmbeddingObjective
-
+from gpu.optimize.objective.contrastive_multilingual import ContrastiveMultilingualEmbeddingObjective
 from gpu.optimize.sgd import SGD
 from gpu.optimize.regularizer import L2Regularizer
 from gpu.optimize.update_rule import AdaGrad
@@ -50,6 +39,18 @@ def replace_unknowns(data, dictionary, unknown):
 
 
 def run():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch_size", type=int, default=200)
+    parser.add_argument("--learning_rate", type=float, default=0.01)
+    parser.add_argument("--n_samples", type=int, default=50)
+    parser.add_argument("--margin", type=float, default=40.0)
+    parser.add_argument("--embedding_dimension", type=int, default=40)
+    parser.add_argument("--regularizer", type=float, default=1.0)
+    parser.add_argument("--max_epochs", type=int, default=99999999)
+    parser.add_argument("--save_file_name", type=str, default="model.pkl")
+    parser.add_argument("--results_dir", type=str, default=".")
+    args = parser.parse_args()
+
     # random.seed(435)
     # np.random.seed(2342)
     np.set_printoptions(linewidth=100)
@@ -74,15 +75,13 @@ def run():
     english_data = replace_unknowns(english_data, english_dictionary, 'UNKNOWN')
     german_data = replace_unknowns(german_data, german_dictionary, 'UNKNOWN')
 
-    batch_size = 50
-
     assert len(english_data) == len(german_data)
-    print len(english_data) / batch_size
+    print len(english_data) / args.batch_size
 
     parallel_en_de_provider = PaddedParallelSequenceMinibatchProvider(
         X1=list(english_data),
         X2=list(german_data),
-        batch_size=batch_size,
+        batch_size=args.batch_size,
         padding='PADDING',
     )
 
@@ -98,7 +97,7 @@ def run():
             DictionaryEncoding(vocabulary=english_dictionary),
 
             WordEmbedding(
-                dimension=40,
+                dimension=args.embedding_dimension,
                 vocabulary_size=len(english_dictionary),
                 padding=english_dictionary['PADDING']),
 
@@ -127,7 +126,7 @@ def run():
             DictionaryEncoding(vocabulary=german_dictionary),
 
             WordEmbedding(
-                dimension=40,
+                dimension=args.embedding_dimension,
                 vocabulary_size=len(german_dictionary),
                 padding=german_dictionary['PADDING']),
 
@@ -160,18 +159,16 @@ def run():
         'de': german_model,
     })
 
-    regularizer = L2Regularizer(lamb=1e0)
+    regularizer = L2Regularizer(lamb=args.regularizer)
 
     objective = ContrastiveMultilingualEmbeddingObjective(
         tagged_parallel_sequence_provider=multilingual_parallel_provider,
-        n_contrastive_samples=50,
-        margin=40.0,
+        n_contrastive_samples=args.n_samples,
+        margin=args.margin,
         regularizer=regularizer)
 
-
     update_rule = AdaGrad(
-        # gamma=0.1,
-        gamma=0.05,
+        gamma=args.learning_rate,
         model_template=model)
 
     optimizer = SGD(
@@ -186,6 +183,9 @@ def run():
         losses.append(iteration_info['cost'])
 
         if batch_index % 50 == 0:
+            # This epoch count will be inaccurate when I move to multilingual
+            epoch = (batch_index // parallel_en_de_provider.batches_per_epoch) + 1
+
             m_en = generic.model.utils.ModelEvaluator(
                 model.get_model('en'),
                 desired_axes=('b', ('d', 'f', 'w')))
@@ -195,6 +195,9 @@ def run():
 
             Y_en_valid = m_en.fprop(X_en_valid, meta_en_valid).get()
             Y_de_valid = m_de.fprop(X_de_valid, meta_de_valid).get()
+
+            # Y_en_valid = m_en.fprop(X_en_valid, meta_en_valid)
+            # Y_de_valid = m_de.fprop(X_de_valid, meta_de_valid)
 
             Y_sqd = squared_distances(Y_en_valid, Y_de_valid)
             correct = np.sum(np.diag(Y_sqd))
@@ -206,13 +209,11 @@ def run():
             # print correct,  incorrect
 
             time_now = time.time()
-            examples_per_hr = (batch_index * batch_size) / (time_now - time_start) * 3600
-
+            examples_per_hr = (batch_index * args.batch_size) / (time_now - time_start) * 3600
 
             print "B: {}, E: {}, L: {}, C: {}, I: {}, I-C: {}, EPH: {}, PS: {}".format(
                 batch_index,
-                # This epoch count will be inaccurate when I move to multilingual
-                (batch_index // parallel_en_de_provider.batches_per_epoch) + 1,
+                epoch,
                 losses[-1],
                 correct,
                 incorrect,
@@ -220,12 +221,12 @@ def run():
                 examples_per_hr,
                 np.mean(np.abs(model.pack())))
 
-        # if batch_index == 100:
-        #     break
+            if epoch > args.max_epochs:
+                break
 
         if batch_index % 100 == 0:
-            with open("model.pkl", 'w') as model_file:
-                pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
+            with open(os.path.join(args.results_dir, args.save_file_name), 'w') as model_file:
+                 pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
 
         # if batch_index % 1000 == 0 and batch_index > 0:
         #     with open("model_optimization.pkl", 'w') as model_file:
@@ -240,4 +241,9 @@ def run():
 
 
 if __name__ == "__main__":
+    # batch_size = 100
+    # learning_rate = 0.05
+    # n_contrastive_samples = 50
+    # margin = 40
+    # embedding_dimension = 40
     run()
