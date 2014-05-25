@@ -14,7 +14,6 @@ class WordEmbedding(object):
 
         if E is None:
             self.E = 0.01 * np.random.standard_normal(size=(self.dimension, self.vocabulary_size))
-            # self.E = 0.01 * np.random.standard_normal(size=(self.vocabulary_size, self.dimension))
 
             self.E[:, padding] = 0.0
         else:
