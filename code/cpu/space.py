@@ -8,8 +8,8 @@ from generic.space import _fold_axes
 
 
 class CPUSpace(Space):
-    def __init__(self, axes, extents=None):
-        super(CPUSpace, self).__init__(axes, extents)
+    def __init__(self, axes, extents=None, **masked_axis):
+        super(CPUSpace, self).__init__(axes, extents, **masked_axis)
 
     def fold(self, X):
         return np.reshape(X, self.folded_shape)
@@ -43,4 +43,3 @@ class CPUSpace(Space):
         X = new_space.unfold(X)
 
         return X, new_space
-
