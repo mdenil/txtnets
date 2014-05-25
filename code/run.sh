@@ -9,7 +9,7 @@ EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
 LIB="$ROOT/venvs/$LOCAL_TAG/lib"
 ENV="$ROOT/venvs/$LOCAL_TAG/env"
 
-
+export HERE="$HERE"
 export DATA="$ROOT/data"
 export RESULTS="$ROOT/results"
 
