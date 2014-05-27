@@ -107,6 +107,7 @@ safe_call conda_install nltk
 safe_call conda_install pandas
 safe_call conda_install beautiful-soup
 safe_call conda_install requests
+safe_call conda_install cython
 safe_call pip_install pyprind
 safe_call pip_install pyfftw
 safe_call pip_install --pre line_profiler
@@ -114,6 +115,7 @@ safe_call pip_install ruffus
 safe_call pip_install sh
 safe_call pip_install simplejson
 safe_call pip_install seaborn
+safe_call pip_install tsne # requires cython
 safe_call install_cld2
 
 if [ "$1" == "--cuda" ]; then
