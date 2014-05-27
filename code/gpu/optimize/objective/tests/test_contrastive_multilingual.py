@@ -47,19 +47,7 @@ class TestGaussianEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(actual.get(), expected, atol=1e-6))
 
 
-class TestContrastiveHingeLoss(unittest.TestCase):
-    def setUp(self):
-        self.b = 100
-        self.margin = 1.0
-
-        self.objective_cpu = cpu.optimize.objective.contrastive_multilingual.ContrastiveHingeLoss(margin=self.margin)
-        self.x_cpu = np.random.standard_normal(size=(self.b, 1)) ** 2
-        self.y_cpu = np.random.standard_normal(size=(self.b, 1)) ** 2
-
-        self.objective_gpu = gpu.optimize.objective.contrastive_multilingual.ContrastiveHingeLoss(margin=self.margin)
-        self.x_gpu = cpu_to_gpu(self.x_cpu.astype(np.float32))
-        self.y_gpu = cpu_to_gpu(self.y_cpu.astype(np.float32))
-
+class LossChecks(object):
     def test_fprop(self):
         actual = self.objective_gpu.fprop(self.x_gpu, self.y_gpu)
         expected = self.objective_cpu.fprop(self.x_cpu, self.y_cpu)
@@ -74,3 +62,31 @@ class TestContrastiveHingeLoss(unittest.TestCase):
         _, actual = self.objective_gpu.bprop(self.x_gpu, self.y_gpu, 1.0)
         _, expected = self.objective_cpu.bprop(self.x_cpu, self.y_cpu, 1.0)
         self.assertTrue(np.allclose(actual.get(), expected, atol=1e-6))
+
+
+class TestContrastiveHingeLoss(LossChecks, unittest.TestCase):
+    def setUp(self):
+        self.b = 100
+        self.margin = 1.0
+
+        self.objective_cpu = cpu.optimize.objective.contrastive_multilingual.ContrastiveHingeLoss(margin=self.margin)
+        self.x_cpu = np.random.standard_normal(size=(self.b, 1)) ** 2
+        self.y_cpu = np.random.standard_normal(size=(self.b, 1)) ** 2
+
+        self.objective_gpu = gpu.optimize.objective.contrastive_multilingual.ContrastiveHingeLoss(margin=self.margin)
+        self.x_gpu = cpu_to_gpu(self.x_cpu.astype(np.float32))
+        self.y_gpu = cpu_to_gpu(self.y_cpu.astype(np.float32))
+
+
+class TestSquareSquareMarginLoss(LossChecks, unittest.TestCase):
+    def setUp(self):
+        self.b = 100
+        self.margin = 1.0
+
+        self.objective_cpu = cpu.optimize.objective.contrastive_multilingual.SquareSquareMarginLoss(margin=self.margin)
+        self.x_cpu = np.random.standard_normal(size=(self.b, 1)) ** 2
+        self.y_cpu = np.random.standard_normal(size=(self.b, 1)) ** 2
+
+        self.objective_gpu = gpu.optimize.objective.contrastive_multilingual.SquareSquareMarginLoss(margin=self.margin)
+        self.x_gpu = cpu_to_gpu(self.x_cpu.astype(np.float32))
+        self.y_gpu = cpu_to_gpu(self.y_cpu.astype(np.float32))

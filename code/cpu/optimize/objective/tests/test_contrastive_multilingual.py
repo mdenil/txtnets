@@ -7,6 +7,8 @@ import scipy.optimize
 
 from cpu.optimize.objective.contrastive_multilingual import GaussianEnergy
 from cpu.optimize.objective.contrastive_multilingual import ContrastiveHingeLoss
+from cpu.optimize.objective.contrastive_multilingual import SquareExponentialLoss
+from cpu.optimize.objective.contrastive_multilingual import SquareSquareMarginLoss
 
 
 class TestGaussianEnergy(unittest.TestCase):
@@ -60,29 +62,9 @@ class TestGaussianEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(actual, expected, atol=1e-5))
 
 
-class TestContrastiveHingeLoss(unittest.TestCase):
-    def setUp(self):
-        self.b = 100
-        self.margin = 1.0
-
-        self.objective = ContrastiveHingeLoss(margin=self.margin)
-        self.x = np.random.standard_normal(size=(self.b, 1)) ** 2
-        self.y = np.random.standard_normal(size=(self.b, 1)) ** 2
-
+class LossFunctionCommon(object):
     def _check_test_data(self):
-        # These are sanity checks for the test data.  If the test fails in this function
-        # just re-run it.
-        value = self.margin + self.x - self.y
-        self.assertTrue(np.any(value > 0))
-        self.assertTrue(np.any(value < 0))
-
-    def test_fprop(self):
-        self._check_test_data()
-
-        actual = self.objective.fprop(self.x, self.y)
-        expected = np.mean(np.maximum(0.0, self.margin + self.x - self.y))
-
-        self.assertTrue(np.allclose(actual, expected))
+        pass
 
     def test_bprop_x(self):
         self._check_test_data()
@@ -116,7 +98,53 @@ class TestContrastiveHingeLoss(unittest.TestCase):
 
         actual = grad(self.y.ravel()).reshape(self.y.shape)
         expected = scipy.optimize.approx_fprime(self.y.ravel(), func, 1e-6).reshape(self.y.shape)
+
         self.assertTrue(np.allclose(actual, expected, atol=1e-5))
+
+
+class TestContrastiveHingeLoss(LossFunctionCommon, unittest.TestCase):
+    def setUp(self):
+        self.b = 100
+        self.margin = 1.0
+
+        self.objective = ContrastiveHingeLoss(margin=self.margin)
+        self.x = np.random.standard_normal(size=(self.b, 1)) ** 2
+        self.y = np.random.standard_normal(size=(self.b, 1)) ** 2
+
+    def test_fprop(self):
+        self._check_test_data()
+
+        actual = self.objective.fprop(self.x, self.y)
+        expected = np.mean(np.maximum(0.0, self.margin + self.x - self.y))
+
+        self.assertTrue(np.allclose(actual, expected))
+
+    def _check_test_data(self):
+        # These are sanity checks for the test data.  If the test fails in this function
+        # just re-run it.
+        value = self.margin + self.x - self.y
+        self.assertTrue(np.any(value > 0))
+        self.assertTrue(np.any(value < 0))
+
+
+class TestSquareExponentialLoss(LossFunctionCommon, unittest.TestCase):
+    def setUp(self):
+        self.b = 100
+        self.margin = 1.0
+
+        self.objective = SquareExponentialLoss(margin=self.margin)
+        self.x = np.random.standard_normal(size=(self.b, 1)) ** 2
+        self.y = np.random.standard_normal(size=(self.b, 1)) ** 2
+
+
+class TestSquareSquareMarginLoss(LossFunctionCommon, unittest.TestCase):
+    def setUp(self):
+        self.b = 100
+        self.margin = 1.0
+
+        self.objective = SquareSquareMarginLoss(margin=self.margin)
+        self.x = np.random.standard_normal(size=(self.b, 1)) ** 2
+        self.y = np.random.standard_normal(size=(self.b, 1)) ** 2
 
 
 class TestContrastiveMultilingualEmbeddingObjective(unittest.TestCase):
