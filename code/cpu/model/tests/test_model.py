@@ -52,7 +52,7 @@ class ModelBProp(unittest.TestCase):
                     n_input_dimensions=n_feature_maps*pooling_size*embedding_dimension / 2),
                 ],
             )
-        self.cost = model.cost.CrossEntropy()
+        self.cost = model.cost.CrossEntropy(stabilizer=0.0)
 
 
     def test_bprop(self):
@@ -173,7 +173,12 @@ class Model(unittest.TestCase):
 
             return np.concatenate([g.ravel() for g in grads])
 
-        self.assertLess(scipy.optimize.check_grad(func, grad, self.model.pack()), 1e-5)
+        actual = grad(self.model.pack())
+        expected = scipy.optimize.approx_fprime(self.model.pack(), func, 1e-6)
+        print np.max(np.abs(actual - expected))
+
+        pack = np.random.standard_normal(size=self.model.pack().shape)
+        self.assertLess(scipy.optimize.check_grad(func, grad, pack), 1e-5)
 
 
     def test_pack_unpack(self):
