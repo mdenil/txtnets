@@ -10,7 +10,7 @@ class DictionaryEncoding(object):
 
         X, X_space = self._fprop(X, meta)
 
-        meta['X_space'] = X_space
+        meta['space_above'] = X_space
 
         fprop_state = {}
 
