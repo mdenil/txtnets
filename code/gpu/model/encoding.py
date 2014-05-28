@@ -10,7 +10,7 @@ import generic.model.encoding
 
 
 class DictionaryEncoding(generic.model.encoding.DictionaryEncoding, gpu.model.layer.Layer):
-    def _fprop(self, X):
+    def _fprop(self, X, meta):
         X = np.vstack([np.atleast_2d(x) for x in X])
         X = gpu.utils.cpu_to_gpu(X.astype(np.int32))
         X_space = gpu.space.GPUSpace.infer(X, ('b', 'w'))
