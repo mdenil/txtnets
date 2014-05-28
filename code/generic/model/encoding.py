@@ -1,5 +1,6 @@
 __author__ = 'mdenil'
 
+
 class DictionaryEncoding(object):
     def __init__(self, vocabulary):
         self.vocabulary = vocabulary
@@ -9,11 +10,7 @@ class DictionaryEncoding(object):
 
         X, X_space = self._fprop(X, meta)
 
-        meta = {
-            'lengths': meta['lengths'],
-            'space_above': X_space,
-            'lengths2': meta['lengths2']
-            }
+        meta['X_space'] = X_space
 
         fprop_state = {}
 

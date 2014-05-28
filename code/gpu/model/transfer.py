@@ -157,6 +157,7 @@ class Bias(generic.model.transfer.Bias, layer.Layer):
             X_space.axes,
             w=X_space.get_extent('w'),
             b=X_space.get_extent('b'))
+
         X += B
         return X
 
