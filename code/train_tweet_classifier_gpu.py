@@ -87,11 +87,11 @@ def run():
 
     # tweet_model = CSM(
     #     layers=[
-    #         DictionaryEncoding(vocabulary=alphabet),
+    #         DictionaryEncoding(vocabulary=encoding),
     #
     #         WordEmbedding(
     #             dimension=32,
-    #             vocabulary_size=len(alphabet)),
+    #             vocabulary_size=len(encoding)),
     #
     #         SentenceConvolution(
     #             n_feature_maps=5,
@@ -121,11 +121,11 @@ def run():
     #
     # tweet_model = CSM(
     #     layers=[
-    #         DictionaryEncoding(vocabulary=alphabet),
+    #         DictionaryEncoding(vocabulary=encoding),
     #
     #         WordEmbedding(
     #             dimension=12,
-    #             vocabulary_size=len(alphabet)),
+    #             vocabulary_size=len(encoding)),
     #
     #         SentenceConvolution(
     #             n_feature_maps=6,
@@ -215,12 +215,12 @@ def run():
     # tweet_model = CSM(
     #     layers=[
     #         # cpu.model.encoding.
-    #         DictionaryEncoding(vocabulary=alphabet),
+    #         DictionaryEncoding(vocabulary=encoding),
     #
     #         # cpu.model.embedding.
     #         WordEmbedding(
     #             dimension=28,
-    #             vocabulary_size=len(alphabet)),
+    #             vocabulary_size=len(encoding)),
     #
     #         # HostToDevice(),
     #

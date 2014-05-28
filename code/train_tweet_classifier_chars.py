@@ -73,10 +73,10 @@ if __name__ == "__main__":
     #
     #     Y = [ [":)", ":("].index(y) for y in Y ]
     #
-    # # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.alphabet.encoding.json")) as alphabet_file:
-    # # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.clean.alphabet.encoding.json")) as alphabet_file:
+    # # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.encoding.encoding.json")) as alphabet_file:
+    # # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.clean.encoding.encoding.json")) as alphabet_file:
     # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.clean.dictionary.encoding.json")) as alphabet_file:
-    #     alphabet = json.loads(alphabet_file.read())
+    #     encoding = json.loads(alphabet_file.read())
 
 
     tweets_dir = os.path.join("../data", "sentiment140")
@@ -89,7 +89,7 @@ if __name__ == "__main__":
         Y = [[":)", ":("].index(y) for y in Y]
 
 
-    # with open(os.path.join(tweets_dir, "sentiment140.train.alphabet.encoding.json")) as alphabet_file:
+    # with open(os.path.join(tweets_dir, "sentiment140.train.encoding.encoding.json")) as alphabet_file:
     with open(os.path.join(tweets_dir, "sentiment140.train.clean.dictionary.encoding.json")) as alphabet_file:
         alphabet = json.loads(alphabet_file.read())
 
@@ -129,11 +129,11 @@ if __name__ == "__main__":
     #
     # tweet_model = CSM(
     #     layers=[
-    #         DictionaryEncoding(vocabulary=alphabet),
+    #         DictionaryEncoding(vocabulary=encoding),
     #
     #         WordEmbedding( # really a character embedding
     #                        dimension=32,
-    #                        vocabulary_size=len(alphabet)),
+    #                        vocabulary_size=len(encoding)),
     #
     #         SentenceConvolution(
     #             n_feature_maps=5,
@@ -163,11 +163,11 @@ if __name__ == "__main__":
     #
     # tweet_model = CSM(
     #     layers=[
-    #         DictionaryEncoding(vocabulary=alphabet),
+    #         DictionaryEncoding(vocabulary=encoding),
     #
     #         WordEmbedding(
     #             dimension=12,
-    #             vocabulary_size=len(alphabet)),
+    #             vocabulary_size=len(encoding)),
     #
     #         SentenceConvolution(
     #             n_feature_maps=6,
@@ -209,11 +209,11 @@ if __name__ == "__main__":
 
     # tweet_model = CSM(
     #     layers=[
-    #         DictionaryEncoding(vocabulary=alphabet),
+    #         DictionaryEncoding(vocabulary=encoding),
     #
     #         WordEmbedding(
     #             dimension=24,
-    #             vocabulary_size=len(alphabet)),
+    #             vocabulary_size=len(encoding)),
     #
     #         SentenceConvolution(
     #             n_feature_maps=10,
