@@ -1,18 +1,14 @@
-__author__ = 'albandemiraj'
+__author__ = 'albandemiraj, mdenil'
 
 import numpy as np
 import scipy.optimize
 import pyprind
 import os
 import time
-import gzip
 import random
 import simplejson as json
 import cPickle as pickle
 import matplotlib.pyplot as plt
-from nltk.tokenize import WordPunctTokenizer
-
-from collections import OrderedDict
 
 from cpu.model.model import CSM
 from cpu.model.encoding import DictionaryEncoding
@@ -23,32 +19,12 @@ from cpu.model.pooling import SumFolding
 from cpu.model.pooling import MaxFolding
 from cpu.model.pooling import KMaxPooling
 from cpu.model.nonlinearity import Tanh
-from cpu.model.nonlinearity import Relu
 from cpu.model.transfer import Softmax
-from cpu.model.transfer import Linear
-
-from cpu import space
-from cpu.model import layer
-
 from cpu.model.cost import CrossEntropy
-from cpu.model.cost import LargeMarginCost
-
-from cpu.optimize.data_provider import MinibatchDataProvider
-from cpu.optimize.data_provider import BatchDataProvider
-from cpu.optimize.data_provider import PaddedSequenceMinibatchProvider
 
 from cpu.optimize.objective import CostMinimizationObjective
-
 from cpu.optimize.regularizer import L2Regularizer
-
 from cpu.optimize.update_rule import AdaGrad
-from cpu.optimize.update_rule import AdaDelta
-from cpu.optimize.update_rule import Basic
-from cpu.optimize.update_rule import NesterovAcceleratedGradient
-from cpu.optimize.update_rule import Momentum
-
-from cpu.optimize.data_provider import LabelledSequenceMinibatchProvider
-
 from cpu.optimize.grad_check import ModelGradientChecker
 
 from cpu.optimize.sgd import SGD
@@ -61,78 +37,48 @@ if __name__ == "__main__":
     np.random.seed(2342)
     np.set_printoptions(linewidth=100)
 
-    # tweets_dir = os.path.join("data", "tweets")
-    # # with gzip.open(os.path.join(tweets_dir, "tweets_100k.english.balanced.json.gz")) as data_file:
-    # with gzip.open(os.path.join(tweets_dir, "tweets_100k.english.balanced.clean.json.gz")) as data_file:
-    #     data = json.loads(data_file.read())
-    #     X, Y = map(list, zip(*data))
-    #
-    #     # shuffle
-    #     combined = zip(X, Y)
-    #     random.shuffle(combined)
-    #     X, Y = map(list, zip(*combined))
-    #
-    #     Y = [ [":)", ":("].index(y) for y in Y ]
-    #
-    # # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.alphabet.encoding.json")) as alphabet_file:
-    # # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.clean.alphabet.encoding.json")) as alphabet_file:
-    # with open(os.path.join(tweets_dir, "tweets_100k.english.balanced.clean.dictionary.encoding.json")) as alphabet_file:
-    #     alphabet = json.loads(alphabet_file.read())
+    data_dir = os.path.join("../data", "stanfordmovie")
 
-
-    tweets_dir = os.path.join("../data", "sentiment140")
-
-    # with open(os.path.join(tweets_dir, "sentiment140.train.json")) as data_file:
-    with open(os.path.join(tweets_dir, "sentiment140.train.clean.json")) as data_file:
-        data = json.loads(data_file.read())
+    with open(os.path.join(data_dir, "stanfordmovie.train.sentences.clean.projected.json")) as data_file:
+        data = json.load(data_file)
         random.shuffle(data)
         X, Y = map(list, zip(*data))
         Y = [[":)", ":("].index(y) for y in Y]
 
+    with open(os.path.join(data_dir, "stanfordmovie.train.sentences.clean.dictionary.encoding.json")) as encoding_file:
+        encoding = json.load(encoding_file)
 
-    # with open(os.path.join(tweets_dir, "sentiment140.train.alphabet.encoding.json")) as alphabet_file:
-    with open(os.path.join(tweets_dir, "sentiment140.train.clean.dictionary.encoding.json")) as alphabet_file:
-        alphabet = json.loads(alphabet_file.read())
+    print len(encoding)
 
-    print len(alphabet)
-
-    # lists of characters.
-    # X = [list(x) for x in X]
-
-
-    # lists of words
-    # replace unknowns with an unknown character
-    tokenizer = WordPunctTokenizer()
-    new_X = []
-    for x in X:
-        new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
-    X = new_X
+    n_validation = 500
+    batch_size = 50
 
     train_data_provider = LabelledDocumentMinibatchProvider(
-        X=X[:-500],
-        Y=Y[:-500],
-        batch_size=100,
-        padding='PADDING')
+        X=X[:-n_validation],
+        Y=Y[:-n_validation],
+        batch_size=batch_size,
+        padding='PADDING',
+        fixed_n_sentences=15,
+        fixed_n_words=50)
 
     print train_data_provider.batches_per_epoch
 
-
-    n_validation = 500
     validation_data_provider = LabelledDocumentMinibatchProvider(
         X=X[-n_validation:],
         Y=Y[-n_validation:],
-        batch_size=n_validation,
-        padding='PADDING')
-
+        batch_size=batch_size,
+        padding='PADDING',
+        fixed_n_sentences=15,
+        fixed_n_words=50)
 
     tweet_model = CSM(
         layers=[
-            DictionaryEncoding(vocabulary=alphabet),
+            DictionaryEncoding(vocabulary=encoding),
 
             WordEmbedding(
                 dimension=28,
-                vocabulary_size=len(alphabet),
-                padding=alphabet['PADDING']),
+                vocabulary_size=len(encoding),
+                padding=encoding['PADDING']),
 
             SentenceConvolution(
                 n_feature_maps=6,
@@ -195,7 +141,10 @@ if __name__ == "__main__":
 
     regularizer = L2Regularizer(lamb=1e-4)
 
-    objective = CostMinimizationObjective(cost=cost_function, data_provider=train_data_provider, regularizer=regularizer)
+    objective = CostMinimizationObjective(
+        cost=cost_function,
+        data_provider=train_data_provider,
+        regularizer=regularizer)
 
     update_rule = AdaGrad(
         gamma=0.01,
@@ -206,10 +155,11 @@ if __name__ == "__main__":
         objective=objective,
         update_rule=update_rule)
 
-
     gradient_checker = ModelGradientChecker(
-        CostMinimizationObjective(cost=cost_function, data_provider=validation_data_provider, regularizer=regularizer))
-
+        CostMinimizationObjective(
+            cost=cost_function,
+            data_provider=validation_data_provider,
+            regularizer=regularizer))
 
     n_epochs = 1
     n_batches = train_data_provider.batches_per_epoch * n_epochs
@@ -222,9 +172,15 @@ if __name__ == "__main__":
         costs.append(iteration_info['cost'])
 
         if batch_index % 10 == 0:
-            X_valid, Y_valid, meta_valid = validation_data_provider.next_batch()
 
-            Y_hat = tweet_model.fprop(X_valid, meta=meta_valid)
+            Y_hat = []
+            Y_valid = []
+            for _ in xrange(validation_data_provider.batches_per_epoch):
+                X_valid_batch, Y_valid_batch, meta_valid = validation_data_provider.next_batch()
+                Y_valid.append(Y_valid_batch)
+                Y_hat.append(tweet_model.fprop(X_valid_batch, meta=meta_valid))
+            Y_valid = np.concatenate(Y_valid, axis=0)
+            Y_hat = np.concatenate(Y_hat, axis=0)
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
             # This is really slow:
@@ -235,7 +191,8 @@ if __name__ == "__main__":
 
             print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, g: {}".format(
                 batch_index,
-                acc, costs[-1],
+                acc,
+                costs[-1],
                 np.argmax(Y_hat, axis=1).mean(),
                 np.mean(np.abs(tweet_model.pack())),
                 grad_check)
@@ -244,8 +201,8 @@ if __name__ == "__main__":
             with open("model.pkl", 'w') as model_file:
                 pickle.dump(tweet_model, model_file, protocol=-1)
 
-        if batch_index == 100:
-            break
+        # if batch_index == 10:
+        #     break
 
     time_end = time.time()
 

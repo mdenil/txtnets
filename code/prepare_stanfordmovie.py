@@ -1,7 +1,6 @@
-__author__ = 'albandemiraj'
+__author__ = 'albandemiraj, mdenil'
 
 import numpy as np
-import pandas as pd
 import os
 import sh
 import re
@@ -9,10 +8,17 @@ import ruffus
 import psutil
 import simplejson as json
 from collections import Counter
+import nltk
 from nltk.tokenize import WordPunctTokenizer
+from nltk.tokenize.punkt import PunktSentenceTokenizer
 import random
+import string
+import cPickle as pickle
 
-# http://help.sentiment140.com/for-students
+from cpu.model.model import CSM
+from cpu.model.encoding import DictionaryEncoding
+from generic.optimize.data_provider import LabelledDocumentMinibatchProvider
+
 
 data_dir = "../data"
 stanfordmovie_dir = os.path.join(data_dir, "stanfordmovie")
@@ -22,9 +28,10 @@ def download_data(output_file):
     sh.wget("-O", output_file, "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz")
 
 
-@ruffus.split(download_data, ["aclImdb"])
+@ruffus.transform(download_data, ruffus.regex("aclImdb_v1.tar.gz"), "aclImdb")
 def extract_data(input_file_name, output_file_name):
     sh.tar("-xzvf", input_file_name)
+    sh.touch("aclImdb")
 
 
 @ruffus.split(
@@ -37,84 +44,115 @@ def create_jsons(input_file_name, output_file_names):
     pos_dir = os.path.join('aclImdb', "train", "pos")
     neg_dir = os.path.join('aclImdb', "train", "neg")
 
-    reviews=[]
+    reviews = []
 
     #Work on positive reviews and add them to reviews list
-    for file in os.listdir(pos_dir):
-        if(file=='.DS_Store'): continue
-        with open(os.path.join(pos_dir,file)) as f:
-            for line in f:
-                reviews.append([line, ':)'])
+    for review_file_name in os.listdir(pos_dir):
+        if review_file_name == '.DS_Store':
+            continue
+
+        with open(os.path.join(pos_dir, review_file_name)) as review_file:
+            for review in review_file:
+                reviews.append([nltk.clean_html(review), ':)'])
 
     #Work on negative reviews and add them to reviews list
-    for file in os.listdir(neg_dir):
-        if(file=='.DS_Store'): continue
-        with open(os.path.join(neg_dir,file)) as f:
-            for line in f:
-                reviews.append([line, ':('])
+    for review_file_name in os.listdir(neg_dir):
+        if review_file_name == '.DS_Store':
+            continue
+
+        with open(os.path.join(neg_dir, review_file_name)) as review_file:
+            for review in review_file:
+                reviews.append([nltk.clean_html(review), ':('])
 
     random.shuffle(reviews)
 
-    with open("stanfordmovie.train.json", 'w') as file:
-        file.write("{}\n".format(json.dumps(reviews)))
+    with open("stanfordmovie.train.json", 'w') as train_file:
+        json.dump(reviews, train_file)
+        train_file.write("\n")
 
     #------------------------
     #WORKING ON THE TEST FILE
     pos_dir = os.path.join('aclImdb', "test", "pos")
     neg_dir = os.path.join('aclImdb', "test", "neg")
 
-    reviews=[]
+    reviews = []
 
     #Work on positive reviews and add them to reviews list
-    for file in os.listdir(pos_dir):
-        if(file=='.DS_Store'): continue
-        with open(os.path.join(pos_dir,file)) as f:
-            for line in f:
-                reviews.append([line, ':)'])
+    for review_file_name in os.listdir(pos_dir):
+        if review_file_name == '.DS_Store':
+            continue
+
+        with open(os.path.join(pos_dir, review_file_name)) as review_file:
+            for review in review_file:
+                reviews.append([nltk.clean_html(review), ':)'])
 
     #Work on negative reviews and add them to reviews list
-    for file in os.listdir(neg_dir):
-        if(file=='.DS_Store'): continue
-        with open(os.path.join(neg_dir,file)) as f:
-            for line in f:
-                reviews.append([line, ':('])
+    for review_file_name in os.listdir(neg_dir):
+        if review_file_name == '.DS_Store':
+            continue
+
+        with open(os.path.join(neg_dir, review_file_name)) as review_file:
+            for review in review_file:
+                reviews.append([nltk.clean_html(review), ':('])
 
     random.shuffle(reviews)
 
-    with open("stanfordmovie.test.json", 'w') as file:
-        file.write("{}\n".format(json.dumps(reviews)))
+    with open("stanfordmovie.test.json", 'w') as test_file:
+        json.dump(reviews, test_file)
+        test_file.write("\n")
 
     #--------------------------------
     #WORKING ON THE UNSUPERVISED FILE
     unsup_dir = os.path.join('aclImdb', "train", "unsup")
 
-    reviews=[]
+    reviews = []
 
     #Work on positive reviews and add them to reviews list
-    for file in os.listdir(unsup_dir):
-        if(file=='.DS_Store'): continue
-        with open(os.path.join(unsup_dir,file)) as f:
-            for line in f:
-                reviews.append([line, ':|'])
+    for review_file_name in os.listdir(unsup_dir):
+        if review_file_name == '.DS_Store':
+            continue
+
+        with open(os.path.join(unsup_dir, review_file_name)) as review_file:
+            for review in review_file:
+                reviews.append([nltk.clean_html(review), ':|'])
 
     random.shuffle(reviews)
 
-    with open("stanfordmovie.unsup.json", 'w') as file:
-        file.write("{}\n".format(json.dumps(reviews)))
+    with open("stanfordmovie.unsup.json", 'w') as unsup_file:
+        json.dump(reviews, unsup_file)
+        unsup_file.write("\n")
 
 
-@ruffus.transform(create_jsons, ruffus.suffix(".json"), ".clean.json")
+@ruffus.transform(create_jsons, ruffus.suffix(".json"), ".sentences.json")
+def split_into_sentences(input_file_name, output_file_name):
+    with open(input_file_name) as input_file:
+        labelled_reviews = json.load(input_file)
+
+    tokenizer = PunktSentenceTokenizer()
+
+    tokenized_labelled_reviews = []
+
+    for text, label in labelled_reviews:
+        tokenized_labelled_reviews.append([tokenizer.tokenize(text), label])
+
+    with open(output_file_name, 'w') as sentence_file:
+        json.dump(tokenized_labelled_reviews, sentence_file)
+        sentence_file.write("\n")
+
+
+@ruffus.transform(split_into_sentences, ruffus.suffix(".json"), ".clean.json")
 def clean_data(input_file_name, output_file_name):
+    digits = set(string.digits)
+
     #TODO: 1. Cleaning procedure may still need improvement with some html tags
     def clean_word(word):
-        word = word.lower() #lowercase is not ideal, TODO:
+        word = word.lower()
         word = word.replace('&amp;','&').replace('&lt;','<').replace('&gt;','>').replace('&quot;','"').replace('&#39;',"'")
-        word = re.sub(r'(\S)\1+', r'\1\1', word) #normalize repeated characters to two
+        word = re.sub(r'(\S)\1+', r'\1\1', word)  # normalize repeated characters to two
         word = re.sub(r'(\S\S)\1+', r'\1\1', word)
 
-        word = word.replace("n't", " nt") #<===MAYBE TAKE THIS OFF
+        word = word.replace("n't", " nt")  # <===MAYBE TAKE THIS OFF
         word = word.replace('"', '')
-        word = word.replace('<br', '').replace('/>','')
         word = word.replace('(', '')
         word = word.replace(')', '')
         word = word.replace('[', '')
@@ -123,27 +161,57 @@ def clean_data(input_file_name, output_file_name):
         word = word.replace(',', ' ,')
         word = word.replace("'", "")
 
-        #if word.startswith('@'): # this misses "@dudebro: (quote included)
+        word = word.encode('ascii', 'ignore')
+
         if re.match(r'[^A-Za-z0-9]*@', word):
-            #word = 'GENERICUSER' #all other words are lowercase
-            word = 'U'
-        elif word.startswith('#'):
-            #word = 'GENERICHASHTAG'
-            word = 'H'
-        elif re.search('((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-]*)?\??(?:[-\+=&;%@.\w]*)#?(?:[\w]*))?)',word) is not None:
-            #word = 'GENERICHTTP'
-            word = 'L'
+            word = 'GENERIC_USER'
+
+        if re.search(r'((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-]*)?\??(?:[-\+=&;%@.\w]*)#?(?:[\w]*))?)',word) is not None:
+            word = 'GENERIC_HTTP'
+
+        return word.encode('ascii', 'ignore')
+
+    def clean_token(word):
+        letter_set = set(word)
+
+        if letter_set.isdisjoint(string.ascii_letters):
+            # order matters here, although I'm not sure the current order is best
+
+            if letter_set <= digits:
+                word = 'GENERIC_NUMBER'
+
+            elif '?' in letter_set:
+                word = '?'
+
+            elif '!' in letter_set:
+                word = '!'
+
+            elif '.' in letter_set:
+                word = '.'
+
+            else:
+                word = 'GENERIC_SYMBOL'
+
+        elif re.match("^\d+st$|^\d+th$|^\d+s$|\d+mm|^[\d:]+pm$|^[\d:]+am$", word):
+            word = "GENERIC_NUMBER"
+
         return word
 
+    tokenizer = WordPunctTokenizer()
     data = []
     with open(input_file_name) as input_file:
-        for line in json.loads(input_file.read()):
-            text, label = line
-            text = " ".join(map(clean_word, text.split()))
-            data.append([text, label])
+        for sentences, label in json.loads(input_file.read()):
+            cleaned_sentences = []
+            for sentence in sentences:
+                cleaned_sentence = " ".join(map(clean_word, sentence.split()))
+                cleaned_sentence = map(clean_token, tokenizer.tokenize(cleaned_sentence))
+                cleaned_sentences.append(cleaned_sentence)
+
+            data.append([cleaned_sentences, label])
 
     with open(output_file_name, 'w') as output_file:
-        output_file.write("{}\n".format(json.dumps(data)))
+        json.dump(data, output_file)
+        output_file.write("\n")
 
 
 @ruffus.transform(
@@ -152,37 +220,113 @@ def clean_data(input_file_name, output_file_name):
 def build_word_dictionary(input_file_name, output_file_name):
     dictionary = Counter()
     with open(input_file_name) as input_file:
-        for line in json.loads(input_file.read()):
-            text, label = line
-            tokenizer = WordPunctTokenizer()
-            dictionary.update(tokenizer.tokenize(text))
+        for sentences, label in json.loads(input_file.read()):
+            for words in sentences:
+                dictionary.update(words)
 
     dictionary = list(sorted(w for w in dictionary if dictionary[w] >= 5)) + ['PADDING', 'UNKNOWN']
 
     with open(output_file_name, 'w') as output_file:
-        output_file.write("{}\n".format(json.dumps(dictionary)))
+        json.dump(dictionary, output_file)
+        output_file.write("\n")
 
-@ruffus.merge(build_word_dictionary, "stanfordmovie.full.clean.dicionary.json")
-def combine_dictionary(input_file_names, output_file_name):
-    combined = []
-    for input_file_name in input_file_names:
-        with open(input_file_name) as input_file:
-            print 'HERE: '+str(input_file)
-            data = json.loads(input_file.read())
-            combined += data
+
+@ruffus.follows(build_word_dictionary)
+@ruffus.transform(
+    clean_data,
+    ruffus.suffix(".json"),
+    ruffus.add_inputs(r"\1.dictionary.json"),
+    ".projected.json")
+def project_sentences(input_file_names, output_file_name):
+    review_file_name, dictionary_file_name = input_file_names
+
+    with open(review_file_name) as review_file:
+        reviews = json.load(review_file)
+
+    with open(dictionary_file_name) as dictionary_file:
+        dictionary = json.load(dictionary_file)
+
+    def project_sentence(s):
+        return [w if w in dictionary else "UNKNOWN" for w in s]
+
+    projected_reviews = []
+    for sentences, label in reviews:
+        projected_sentences = map(project_sentence, sentences)
+        projected_reviews.append([projected_sentences, label])
 
     with open(output_file_name, 'w') as output_file:
-        output_file.write("{}\n".format(json.dumps(combined)))
+        json.dump(projected_reviews, output_file)
+        output_file.write("\n")
 
-@ruffus.transform([build_word_dictionary, combine_dictionary], ruffus.suffix(".json"), ".encoding.json")
-def encode_alphabet(input_file, output_file):
-    alphabet = dict()
-    with open(input_file) as alphabet_file:
-        for index, char in enumerate(json.loads(alphabet_file.read())):
-            alphabet[char] = index
 
-    with open(output_file, 'w') as alphabet_dictionary:
-        alphabet_dictionary.write(json.dumps(alphabet))
+@ruffus.transform([build_word_dictionary], ruffus.suffix(".json"), ".encoding.json")
+def encode_dictionary(input_file_name, output_file_name):
+    encoding = dict()
+    with open(input_file_name) as input_file:
+        for index, char in enumerate(json.load(input_file)):
+            encoding[char] = index
+
+    with open(output_file_name, 'w') as output_file:
+        json.dump(encoding, output_file)
+        output_file.write("\n")
+
+@ruffus.subdivide(
+    project_sentences,
+    ruffus.formatter(),
+    "{path[0]}/{basename[0]}.batches/*",
+    "{path[0]}/{basename[0]}.batches")
+def create_batches(input_file_name, output_file_names, output_file_stem):
+        # HACK
+    if "unsup" in input_file_name:
+        return
+
+    # documentation says do this
+    # http://www.ruffus.org.uk/decorators/subdivide.html
+    for oo in output_file_names:
+        os.unlink(oo)
+
+    try:
+        os.mkdir(output_file_stem)
+    except:
+        pass
+
+    dictionary_file_name = input_file_name.replace("projected", "dictionary.encoding")
+
+    with open(input_file_name) as input_file:
+        data = json.load(input_file)
+        random.shuffle(data)
+        X, Y = map(list, zip(*data))
+        Y = [[":)", ":("].index(y) for y in Y]
+
+    with open(dictionary_file_name) as dictionary_file:
+        encoding = json.load(dictionary_file)
+
+    batch_size = 10
+
+    batch_data_provider = LabelledDocumentMinibatchProvider(
+        X=X,
+        Y=Y,
+        batch_size=batch_size,
+        padding='PADDING',
+        fixed_n_sentences=20,
+        fixed_n_words=50)
+
+    encoding_model = CSM(
+        layers=[
+            DictionaryEncoding(vocabulary=encoding),
+        ])
+
+    for batch_index in xrange(batch_data_provider.batches_per_epoch):
+        X_batch, Y_batch, meta_batch = batch_data_provider.next_batch()
+        X_batch, meta_batch, _ = encoding_model.fprop(X_batch, meta=meta_batch, return_state=True)
+
+        batch_stem = os.path.join(output_file_stem, "{:06}".format(batch_index))
+
+        np.save("{}.X.npy".format(batch_stem), X_batch)
+        np.save("{}.Y.npy".format(batch_stem), Y_batch)
+        with open("{}.m.npy".format(batch_stem), 'w') as meta_file:
+            pickle.dump(meta_batch, meta_file)
+
 
 
 if __name__ == "__main__":

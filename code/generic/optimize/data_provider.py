@@ -1,11 +1,4 @@
-__author__ = 'albandemiraj'
-
-
-
-
-
-
-__author__ = 'mdenil'
+__author__ = 'mdenil, albandemiraj'
 
 import numpy as np
 
@@ -207,6 +200,7 @@ class PaddedParallelSequenceMinibatchProvider(object):
     def _shuffle_data(self):
         random.shuffle(self.X)
 
+
 class LabelledDocumentMinibatchProvider(object):
     def __init__(self, X, Y, batch_size, padding, shuffle=True, fixed_n_words=False, fixed_n_sentences=False):
         self.X = X
@@ -214,7 +208,7 @@ class LabelledDocumentMinibatchProvider(object):
         self.batch_size = batch_size
         self.padding = padding
         self.fixed_n_words = fixed_n_words
-        self.fixed_n_sentences=fixed_n_sentences
+        self.fixed_n_sentences = fixed_n_sentences
         self.shuffle = shuffle
 
         self._batch_index = -1
@@ -231,14 +225,8 @@ class LabelledDocumentMinibatchProvider(object):
 
         Y_batch = np.equal.outer(Y_batch, np.arange(np.max(Y_batch)+1)).astype(np.float)
 
-        #Just making sure we have the right dimensions
+        # Just making sure we have the right dimensions
         dimension_b = len(X_batch)
-
-        #Splitting at .
-        new_X = []
-        for x in X_batch:
-            new_X.append(self.split(x))
-        X_batch=new_X
 
         #Defining number of SENTENCES in a DOCUMENT
         document_lengths = np.asarray(map(len, X_batch))
@@ -249,7 +237,7 @@ class LabelledDocumentMinibatchProvider(object):
         else:
             max_n_sentences = int(document_lengths.max())
 
-        #Padding or truncationg the number of SENTENCES
+        # Padding or truncationg the number of SENTENCES
         X_batch = [self._pad_or_truncate_document(x, max_n_sentences) for x in X_batch]
 
         #NOW we have the information we need, so we can go back and work in 2d
@@ -266,18 +254,26 @@ class LabelledDocumentMinibatchProvider(object):
         else:
             max_n_words = int(sentence_lengths.max())
 
-        #Padding or truncationg the number of WORDS
+        # Padding or truncationg the number of WORDS
         X_batch = [self._pad_or_truncate_sentences(x, max_n_words) for x in X_batch]
 
         meta = {
             'lengths': sentence_lengths,
             'lengths2': document_lengths,
             'space_below': cpu.space.CPUSpace(
-                axes=[('b','s'), 'w'],
-                extents=OrderedDict([('b', dimension_b), ('s', max_n_sentences),('w', max_n_words)])),
+                axes=(('b', 's'), 'w'),
+                extents={
+                    'b': dimension_b,
+                    's': max_n_sentences,
+                    'w': max_n_words,
+                }),
             'space_above': cpu.space.CPUSpace(
-                axes=[('b','s'), 'w'],
-                extents=OrderedDict([('b', dimension_b), ('s', max_n_sentences),('w', max_n_words)]))
+                axes=[('b', 's'), 'w'],
+                extents={
+                    'b': dimension_b,
+                    's': max_n_sentences,
+                    'w': max_n_words,
+                })
         }
 
         return X_batch, Y_batch, meta
@@ -306,17 +302,16 @@ class LabelledDocumentMinibatchProvider(object):
             return x[:max_length]
 
     def split(self, x):
-        return self.do_split(x,[])
+        return self.do_split(x, [])
 
-    def do_split(self,x,y):
+    def do_split(self, x, y):
         try:
             index = x.index('.')
             y.append(x[:index+1])
-            if index+1==len(x):
+            if index + 1 == len(x):
                 return y
             else:
-                self
-                return self.do_split(x[index+1:],y)
+                return self.do_split(x[index+1:], y)
         except ValueError:
             y.append(x)
             return y
