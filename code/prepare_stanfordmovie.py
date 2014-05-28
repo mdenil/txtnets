@@ -270,64 +270,6 @@ def encode_dictionary(input_file_name, output_file_name):
         json.dump(encoding, output_file)
         output_file.write("\n")
 
-@ruffus.subdivide(
-    project_sentences,
-    ruffus.formatter(),
-    "{path[0]}/{basename[0]}.batches/*",
-    "{path[0]}/{basename[0]}.batches")
-def create_batches(input_file_name, output_file_names, output_file_stem):
-        # HACK
-    if "unsup" in input_file_name:
-        return
-
-    # documentation says do this
-    # http://www.ruffus.org.uk/decorators/subdivide.html
-    for oo in output_file_names:
-        os.unlink(oo)
-
-    try:
-        os.mkdir(output_file_stem)
-    except:
-        pass
-
-    dictionary_file_name = input_file_name.replace("projected", "dictionary.encoding")
-
-    with open(input_file_name) as input_file:
-        data = json.load(input_file)
-        random.shuffle(data)
-        X, Y = map(list, zip(*data))
-        Y = [[":)", ":("].index(y) for y in Y]
-
-    with open(dictionary_file_name) as dictionary_file:
-        encoding = json.load(dictionary_file)
-
-    batch_size = 10
-
-    batch_data_provider = LabelledDocumentMinibatchProvider(
-        X=X,
-        Y=Y,
-        batch_size=batch_size,
-        padding='PADDING',
-        fixed_n_sentences=20,
-        fixed_n_words=50)
-
-    encoding_model = CSM(
-        layers=[
-            DictionaryEncoding(vocabulary=encoding),
-        ])
-
-    for batch_index in xrange(batch_data_provider.batches_per_epoch):
-        X_batch, Y_batch, meta_batch = batch_data_provider.next_batch()
-        X_batch, meta_batch, _ = encoding_model.fprop(X_batch, meta=meta_batch, return_state=True)
-
-        batch_stem = os.path.join(output_file_stem, "{:06}".format(batch_index))
-
-        np.save("{}.X.npy".format(batch_stem), X_batch)
-        np.save("{}.Y.npy".format(batch_stem), Y_batch)
-        with open("{}.m.npy".format(batch_stem), 'w') as meta_file:
-            pickle.dump(meta_batch, meta_file)
-
-
 
 if __name__ == "__main__":
     if not os.path.exists(stanfordmovie_dir):
