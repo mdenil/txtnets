@@ -69,8 +69,15 @@ if __name__ == "__main__":
         X, Y = map(list, zip(*data))
         Y = [[":)", ":("].index(y) for y in Y]
 
-    with open(os.path.join(tweets_dir, "stanfordmovie.test.clean.dictionary.encoding.json")) as alphabet_file:
+    with open(os.path.join(tweets_dir, "stanfordmovie.train.clean.dictionary.encoding.json")) as alphabet_file:
         alphabet = json.loads(alphabet_file.read())
+
+    tokenizer = WordPunctTokenizer()
+    new_X = []
+    for x in X:
+        new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
+    X = new_X
+
 
     evaluation_data_provider = LabelledDocumentMinibatchProvider(
         X=X,
@@ -89,9 +96,11 @@ if __name__ == "__main__":
     time_start = time.time()
 
     #EVALUATING
-    full_Y_valid = []
-    full_Y_hat = []
-    for batch_index in xrange(0, evaluation_data_provider.batches_per_epoch-1):
+    X_valid, full_Y_valid, meta_valid = evaluation_data_provider.next_batch()
+    full_Y_hat = trained_model.fprop(X_valid, meta=meta_valid)
+    assert np.all(np.abs(full_Y_hat.sum(axis=1) - 1) < 1e-6)
+
+    for batch_index in xrange(0, evaluation_data_provider.batches_per_epoch-2):
         X_valid, Y_valid, meta_valid = evaluation_data_provider.next_batch()
         Y_hat = trained_model.fprop(X_valid, meta=meta_valid)
         assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
@@ -101,8 +110,10 @@ if __name__ == "__main__":
 
         if batch_index % 100 == 0:
             acc = np.mean(np.argmax(full_Y_hat, axis=1) == np.argmax(full_Y_valid, axis=1))
-            print 'Accuracy so far: '+str(acc)
+            print 'Batch: '+str(batch_index)+'/'+str(evaluation_data_provider.batches_per_epoch)+';  Accuracy so far: '+str(acc)
 
     time_end = time.time()
 
+    acc = np.mean(np.argmax(full_Y_hat, axis=1) == np.argmax(full_Y_valid, axis=1))
+    print 'FINAL ACCURACY: '+str(acc)
     print "Time elapsed: {}s".format(time_end - time_start)
