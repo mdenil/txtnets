@@ -10,9 +10,6 @@ import simplejson as json
 import cPickle as pickle
 import matplotlib.pyplot as plt
 
-import pycuda.autoinit
-import pycuda.gpuarray
-
 from cpu.model.model import CSM
 from cpu.model.encoding import DictionaryEncoding
 from cpu.model.embedding import WordEmbedding
@@ -31,10 +28,7 @@ from cpu.optimize.data_provider import LabelledDocumentMinibatchProvider
 
 
 def maybe_get(x):
-    if isinstance(x, pycuda.gpuarray.GPUArray):
-        return x.get()
-    else:
-        return x
+    return x
 
 
 if __name__ == "__main__":
@@ -120,6 +114,7 @@ if __name__ == "__main__":
             Tanh(),
 
             ReshapeForDocuments(),
+
             SentenceConvolution(
                 n_feature_maps=10,
                 kernel_width=3,
@@ -379,6 +374,8 @@ if __name__ == "__main__":
 
     best_acc = -1.0
 
+
+    progress = []
     costs = []
     prev_weights = tweet_model.pack()
     for batch_index, iteration_info in enumerate(optimizer):
@@ -409,13 +406,18 @@ if __name__ == "__main__":
                 with open("model_best.pkl", 'w') as model_file:
                     pickle.dump(tweet_model, model_file, protocol=-1)
 
-            print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, best: {}".format(
-                batch_index,
-                acc,
-                costs[-1],
-                np.argmax(Y_hat, axis=1).mean(),
-                np.mean(np.abs(tweet_model.pack())),
-                best_acc)
+            current = dict()
+            current['B']=batch_index
+            current['A']=acc
+            current['C']=costs[-1]
+            current['Prop']=np.argmax(Y_hat, axis=1).mean()
+            current['Params']=np.mean(np.abs(tweet_model.pack()))
+            current['G']=grad_check
+
+            progress.append(current)
+            print current
+            with open("progress.pkl", 'w') as progress_file:
+                pickle.dump(progress, progress_file, protocol=-1)
 
         if batch_index == 100:
             break
