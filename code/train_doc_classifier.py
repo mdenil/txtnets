@@ -10,13 +10,14 @@ import simplejson as json
 import cPickle as pickle
 import matplotlib.pyplot as plt
 
+import pycuda.autoinit
+import pycuda.gpuarray
+
 from cpu.model.model import CSM
 from cpu.model.encoding import DictionaryEncoding
 from cpu.model.embedding import WordEmbedding
 from cpu.model.transfer import SentenceConvolution
 from cpu.model.transfer import Bias
-from cpu.model.pooling import SumFolding
-from cpu.model.pooling import MaxFolding
 from cpu.model.pooling import KMaxPooling
 from cpu.model.transfer import ReshapeForDocuments
 from cpu.model.nonlinearity import Tanh
@@ -26,9 +27,14 @@ from cpu.optimize.objective import CostMinimizationObjective
 from cpu.optimize.regularizer import L2Regularizer
 from cpu.optimize.update_rule import AdaGrad
 from cpu.optimize.sgd import SGD
+from cpu.optimize.data_provider import LabelledDocumentMinibatchProvider
 
 
-from generic.optimize.data_provider import LabelledDocumentMinibatchProvider
+def maybe_get(x):
+    if isinstance(x, pycuda.gpuarray.GPUArray):
+        return x.get()
+    else:
+        return x
 
 
 if __name__ == "__main__":
@@ -50,7 +56,7 @@ if __name__ == "__main__":
     print len(encoding)
 
     n_validation = 500
-    batch_size = 50
+    batch_size = 25
 
     train_data_provider = LabelledDocumentMinibatchProvider(
         X=X[:-n_validation],
@@ -77,14 +83,14 @@ if __name__ == "__main__":
             DictionaryEncoding(vocabulary=encoding),
 
             WordEmbedding(
-                dimension=28,
+                dimension=10,
                 vocabulary_size=len(encoding),
                 padding=encoding['PADDING']),
 
             SentenceConvolution(
                 n_feature_maps=6,
                 kernel_width=7,
-                n_channels=28,
+                n_channels=10,
                 n_input_dimensions=1),
 
             Bias(
@@ -384,8 +390,10 @@ if __name__ == "__main__":
             Y_valid = []
             for _ in xrange(validation_data_provider.batches_per_epoch):
                 X_valid_batch, Y_valid_batch, meta_valid = validation_data_provider.next_batch()
+                X_valid_batch = maybe_get(X_valid_batch)
+                Y_valid_batch = maybe_get(Y_valid_batch)
                 Y_valid.append(Y_valid_batch)
-                Y_hat.append(tweet_model.fprop(X_valid_batch, meta=meta_valid))
+                Y_hat.append(maybe_get(tweet_model.fprop(X_valid_batch, meta=meta_valid)))
             Y_valid = np.concatenate(Y_valid, axis=0)
             Y_hat = np.concatenate(Y_hat, axis=0)
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
@@ -409,12 +417,12 @@ if __name__ == "__main__":
                 np.mean(np.abs(tweet_model.pack())),
                 best_acc)
 
+        if batch_index == 100:
+            break
+
         if batch_index % 100 == 0:
             with open("model.pkl", 'w') as model_file:
                 pickle.dump(tweet_model, model_file, protocol=-1)
-
-        # if batch_index == 10:
-        #     break
 
     time_end = time.time()
 
