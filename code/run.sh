@@ -10,6 +10,8 @@ LIB="$ROOT/venvs/$LOCAL_TAG/lib"
 ENV="$ROOT/venvs/$LOCAL_TAG/env"
 
 
+export ROOT="$ROOT"
+export HERE="$HERE"
 export DATA="$ROOT/data"
 export RESULTS="$ROOT/results"
 
