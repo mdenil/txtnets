@@ -29,6 +29,11 @@ class PaddedParallelSequenceMinibatchProvider(
     pass
 
 
+class LabelledDocumentMinibatchProvider(
+        generic.optimize.data_provider.LabelledDocumentMinibatchProvider):
+    pass
+
+
 class MinibatchDataProvider(object):
     def __init__(self, X, Y, lengths, batch_size):
         self.X = X

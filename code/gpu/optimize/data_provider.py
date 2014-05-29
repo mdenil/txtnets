@@ -60,6 +60,12 @@ class LabelledSequenceBatchProvider(
     pass
 
 
+class LabelledDocumentMinibatchProvider(
+    TransferLabelsToGPU,
+    generic.optimize.data_provider.LabelledDocumentMinibatchProvider):
+    pass
+
+
 class SequenceMinibatchProvider(
     generic.optimize.data_provider.SequenceMinibatchProvider):
 
