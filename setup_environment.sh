@@ -6,7 +6,7 @@ ROOT="$(pwd)"
 DATA="$ROOT/data"
 RESULTS="$ROOT/results"
 PLATFORM="$(uname)"
-LOCAL_TAG="$HOSTNAME-$PLATFORM"
+LOCAL_TAG="$PLATFORM"
 EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
 LIB="$ROOT/venvs/$LOCAL_TAG/lib"
 ENV="$ROOT/venvs/$LOCAL_TAG/env"
@@ -107,14 +107,16 @@ safe_call conda_install nltk
 safe_call conda_install pandas
 safe_call conda_install beautiful-soup
 safe_call conda_install requests
+safe_call conda_install -c https://conda.binstar.org/richli fftw
+safe_call conda_install -c https://conda.binstar.org/richli pyfftw
+#safe_call pip_install pyfftw
 safe_call pip_install pyprind
-safe_call pip_install pyfftw
 safe_call pip_install --pre line_profiler
 safe_call pip_install ruffus
 safe_call pip_install sh
 safe_call pip_install simplejson
 safe_call pip_install seaborn
-safe_call install_cld2
+#safe_call install_cld2
 
 if [ "$1" == "--cuda" ]; then
     safe_call install_pycuda
