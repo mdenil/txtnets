@@ -225,7 +225,8 @@ class LabelledDocumentMinibatchProvider(object):
         X_batch = self.X[batch_start:batch_end]
         Y_batch = self.Y[batch_start:batch_end]
 
-        Y_batch = np.equal.outer(Y_batch, np.arange(self.max_label_value+1)).astype(np.float)
+        Y_batch = np.equal.outer(Y_batch, np.arange(self.max_label_value+1)).astype(np.float32)
+        assert not np.any(np.isnan(Y_batch))
 
         # Just making sure we have the right dimensions
         dimension_b = len(X_batch)
