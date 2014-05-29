@@ -35,6 +35,7 @@ def make_job_template(
         n_classes,
         pmem,
         ppn,
+        dropout,
         ):
     return {
         "templates": [
@@ -114,6 +115,7 @@ def make_job_template(
                         }
                     ],
                     "n_classes": n_classes,
+                    "dropout": dropout,
                     "softmax_input_dimensions": _softmax_input_dimensions(
                         k_max=k_max_d1,
                         n_feature_maps=n_feature_maps_d1),
@@ -134,24 +136,25 @@ if __name__ == "__main__":
 
     parameter_search_grid = product([
         expand({
-            "embedding_dimension": [10]
+            "embedding_dimension": [20, 40]
         }),
         expand({
-            "n_feature_maps_w1": [10],
-            "n_feature_maps_w2": [11],
-            "n_feature_maps_d1": [12],
+            "n_feature_maps_w1": [10, 20],
+            "n_feature_maps_w2": [10, 20],
+            "n_feature_maps_d1": [10, 20],
         }),
         expand({
             "kernel_width_w1": [7],
             "kernel_width_w2": [5],
-            "kernel_width_d1": [4],
+            "kernel_width_d1": [3, 5],
         }),
         expand({
             "k_max_w1": [8],
             "k_max_w2": [6],
-            "k_max_d1": [4],
+            "k_max_d1": [3, 5],
         }),
         expand({
+            "dropout": [True, False],
             "n_epochs": 10000,
             "adagrad_gamma": 0.01,
             "validation_frequency": 50,
@@ -159,12 +162,15 @@ if __name__ == "__main__":
             "batch_size": 50,
             "walltime": "10:00:00",
             "n_classes": 2,
-            "pmem": "6gb",
+            "pmem": "4gb",
             "ppn": 4,
         })
     ])
 
     job_templates = [make_job_template(**params) for params in parameter_search_grid]
+
+    print len(job_templates)
+    exit(0)
 
     jobs = []
 

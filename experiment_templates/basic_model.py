@@ -10,6 +10,7 @@ from cpu.model.transfer import ReshapeForDocuments
 from cpu.model.nonlinearity import Tanh
 from cpu.model.nonlinearity import Relu
 from cpu.model.transfer import Softmax
+from cpu.model.dropout import Dropout
 
 
 def get_model(encoding):
@@ -62,6 +63,10 @@ def get_model(encoding):
             {{layer.nonlinearity}}(),
 
             {% endfor %}
+
+            {% if dropout %}
+            Dropout(('b', 'd', 'f', 'w'), 0.5),
+            {% endif %}
 
             Softmax(
                 n_classes={{n_classes}},
