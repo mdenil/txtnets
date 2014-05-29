@@ -418,11 +418,11 @@ class DocumentConvolution(object):
         #TRYING TO RECOVER SPACE
         #TODO: Axis should maintin order after MASK, FIX THIS IN SPACES MASK
         X, working_space = meta['space_below'].transform(X, ('b', ('d', 'f', 'w')))
-        working_space = working_space.mask_axis(('d', 'f', 'w'),'d')
-        working_space = working_space.transposed(('b', 'd'))
+        working_space = working_space.mask_axis(('d', 'f', 'w'), 'f')
+        working_space = working_space.transposed(('b', 'f'))
         working_space = working_space.unmask_axes('b')
         working_space = working_space.rename_axes(s='w')
-        X, working_space = working_space.transform(X, (('b','d'),'w'))
+        X, working_space = working_space.transform(X, (('b','f'),'w'))
         #END OF RECOVERY
 
         lengths = meta['lengths2']
@@ -473,9 +473,9 @@ class DocumentConvolution(object):
 
         #HERE WE SHOULD RECOVER THE SPACES
         working_space = working_space.rename_axes(w='s')
-        delta, working_space = working_space.transform(delta, (('b','s'),'d'))
+        delta, working_space = working_space.transform(delta, (('b','s'),'f'))
         working_space = working_space.mask_axis(('b','s'),'b')
-        working_space = working_space.unmask_axes('d')
+        working_space = working_space.unmask_axes('f')
         #RECOVERY COMPLETED
 
         delta, working_space = working_space.transform(delta, (('b', 'd', 'f'), 'w'))
