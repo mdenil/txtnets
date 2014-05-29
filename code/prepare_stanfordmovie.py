@@ -243,6 +243,10 @@ def project_sentences(input_file_names, output_file_name):
     with open(review_file_name) as review_file:
         reviews = json.load(review_file)
 
+    dictionary_file_name.replace('test', 'train')
+    dictionary_file_name.replace('unsup', 'train')
+
+
     with open(dictionary_file_name) as dictionary_file:
         dictionary = json.load(dictionary_file)
 
