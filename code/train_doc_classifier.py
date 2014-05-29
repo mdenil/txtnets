@@ -18,17 +18,16 @@ from cpu.model.transfer import Bias
 from cpu.model.pooling import SumFolding
 from cpu.model.pooling import MaxFolding
 from cpu.model.pooling import KMaxPooling
+from cpu.model.transfer import ReshapeForDocuments
 from cpu.model.nonlinearity import Tanh
 from cpu.model.transfer import Softmax
 from cpu.model.cost import CrossEntropy
-
 from cpu.optimize.objective import CostMinimizationObjective
 from cpu.optimize.regularizer import L2Regularizer
 from cpu.optimize.update_rule import AdaGrad
-from cpu.optimize.grad_check import ModelGradientChecker
-
 from cpu.optimize.sgd import SGD
-from generic.model.transfer import DocumentConvolution
+
+
 from generic.optimize.data_provider import LabelledDocumentMinibatchProvider
 
 
@@ -71,6 +70,8 @@ if __name__ == "__main__":
         fixed_n_sentences=15,
         fixed_n_words=50)
 
+    # easy 90%
+    #
     tweet_model = CSM(
         layers=[
             DictionaryEncoding(vocabulary=encoding),
@@ -83,14 +84,14 @@ if __name__ == "__main__":
             SentenceConvolution(
                 n_feature_maps=6,
                 kernel_width=7,
-                n_channels=1,
-                n_input_dimensions=28),
+                n_channels=28,
+                n_input_dimensions=1),
 
             Bias(
-                n_input_dims=28,
+                n_input_dims=1,
                 n_feature_maps=6),
 
-            SumFolding(),
+            # SumFolding(),
 
             KMaxPooling(k=4, k_dynamic=0.5),
 
@@ -100,29 +101,36 @@ if __name__ == "__main__":
                 n_feature_maps=14,
                 kernel_width=5,
                 n_channels=6,
-                n_input_dimensions=14),
+                n_input_dimensions=1),
 
             Bias(
-                n_input_dims=14,
+                n_input_dims=1,
                 n_feature_maps=14),
 
-            SumFolding(),
+            # SumFolding(),
 
             KMaxPooling(k=4),
 
             Tanh(),
 
-            DocumentConvolution(
+            ReshapeForDocuments(),
+            SentenceConvolution(
                 n_feature_maps=10,
                 kernel_width=3,
-                n_channels=1,
-                n_input_dimensions=392),
+                n_channels=56,
+                n_input_dimensions=1),
+
+            # DocumentConvolution(
+            #     n_feature_maps=10,
+            #     kernel_width=3,
+            #     n_channels=56,
+            #     n_input_dimensions=1),
 
             Bias(
-                n_input_dims=392,
+                n_input_dims=1,
                 n_feature_maps=10),
 
-            SumFolding(),
+            # SumFolding(),
 
             KMaxPooling(k=2),
 
@@ -130,9 +138,212 @@ if __name__ == "__main__":
 
             Softmax(
                 n_classes=2,
-                n_input_dimensions=3920),
+                n_input_dimensions=20),
             ]
     )
+
+
+    # tweet_model = CSM(
+    #     layers=[
+    #         DictionaryEncoding(vocabulary=encoding),
+    #
+    #         WordEmbedding(
+    #             dimension=28,
+    #             vocabulary_size=len(encoding),
+    #             padding=encoding['PADDING']),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=6,
+    #             kernel_width=7,
+    #             n_channels=28,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=6),
+    #
+    #         # SumFolding(),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.5),
+    #
+    #         Tanh(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=14,
+    #             kernel_width=5,
+    #             n_channels=6,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=14),
+    #
+    #         # SumFolding(),
+    #
+    #         KMaxPooling(k=4),
+    #
+    #         Tanh(),
+    #
+    #         ReshapeForDocuments(),
+    #         SentenceConvolution(
+    #             n_feature_maps=10,
+    #             kernel_width=3,
+    #             n_channels=56,
+    #             n_input_dimensions=1),
+    #
+    #         # DocumentConvolution(
+    #         #     n_feature_maps=10,
+    #         #     kernel_width=3,
+    #         #     n_channels=56,
+    #         #     n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=10),
+    #
+    #         # SumFolding(),
+    #
+    #         KMaxPooling(k=2),
+    #
+    #         Tanh(),
+    #
+    #         Softmax(
+    #             n_classes=2,
+    #             n_input_dimensions=20),
+    #         ]
+    # )
+
+    # tweet_model = CSM(
+    #     layers=[
+    #         DictionaryEncoding(vocabulary=encoding),
+    #
+    #         WordEmbedding(
+    #             dimension=20,
+    #             vocabulary_size=len(encoding),
+    #             padding=encoding['PADDING']),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=10,
+    #             kernel_width=7,
+    #             n_channels=20,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=10
+    #         ),
+    #
+    #         # SumFolding(),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.75),
+    #
+    #         Tanh(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=15,
+    #             kernel_width=5,
+    #             n_channels=10,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=15),
+    #
+    #         # SumFolding(),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.5),
+    #
+    #         Tanh(),
+    #
+    #         # ReshapeForDocuments(),
+    #         # SentenceConvolution(
+    #         #     n_feature_maps=15,
+    #         #     kernel_width=3,
+    #         #     n_channels=345,
+    #         #     n_input_dimensions=1),
+    #
+    #         DocumentConvolution(
+    #             n_feature_maps=15,
+    #             kernel_width=3,
+    #             n_channels=345,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=15),
+    #
+    #         # SumFolding(),
+    #
+    #         KMaxPooling(k=4),
+    #
+    #         Tanh(),
+    #
+    #         Softmax(
+    #             n_classes=2,
+    #             n_input_dimensions=60),
+    #         ]
+    # )
+
+
+    # tweet_model = CSM(
+    #     layers=[
+    #         DictionaryEncoding(vocabulary=encoding),
+    #
+    #         WordEmbedding(
+    #             dimension=20,
+    #             vocabulary_size=len(encoding),
+    #             padding=encoding['PADDING']),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=10,
+    #             kernel_width=7,
+    #             n_channels=20,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=10
+    #         ),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.75),
+    #
+    #         Tanh(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=15,
+    #             kernel_width=5,
+    #             n_channels=10,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=15),
+    #
+    #         KMaxPooling(k=4, k_dynamic=0.5),
+    #
+    #         Tanh(),
+    #
+    #         ReshapeForDocuments(),
+    #
+    #         SentenceConvolution(
+    #             n_feature_maps=15,
+    #             kernel_width=3,
+    #             n_channels=345,
+    #             n_input_dimensions=1),
+    #
+    #         Bias(
+    #             n_input_dims=1,
+    #             n_feature_maps=15),
+    #
+    #         KMaxPooling(k=4),
+    #
+    #         Tanh(),
+    #
+    #         Softmax(
+    #             n_classes=2,
+    #             n_input_dimensions=60),
+    #         ]
+    # )
 
     print tweet_model
 
@@ -155,16 +366,12 @@ if __name__ == "__main__":
         objective=objective,
         update_rule=update_rule)
 
-    gradient_checker = ModelGradientChecker(
-        CostMinimizationObjective(
-            cost=cost_function,
-            data_provider=validation_data_provider,
-            regularizer=regularizer))
-
     n_epochs = 1
     n_batches = train_data_provider.batches_per_epoch * n_epochs
 
     time_start = time.time()
+
+    best_acc = -1.0
 
     costs = []
     prev_weights = tweet_model.pack()
@@ -189,13 +396,18 @@ if __name__ == "__main__":
 
             acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid, axis=1))
 
-            print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, g: {}".format(
+            if acc > best_acc:
+                best_acc = acc
+                with open("model_best.pkl", 'w') as model_file:
+                    pickle.dump(tweet_model, model_file, protocol=-1)
+
+            print "B: {}, A: {}, C: {}, Prop1: {}, Param size: {}, best: {}".format(
                 batch_index,
                 acc,
                 costs[-1],
                 np.argmax(Y_hat, axis=1).mean(),
                 np.mean(np.abs(tweet_model.pack())),
-                grad_check)
+                best_acc)
 
         if batch_index % 100 == 0:
             with open("model.pkl", 'w') as model_file:

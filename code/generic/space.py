@@ -8,7 +8,7 @@ import operator
 
 
 class Space(object):
-    def __init__(self, axes, extents=None, **masked_axis):
+    def __init__(self, axes, extents=None):
         self._axes = _canonical_axes_description(axes)
 
         if extents is None:
@@ -19,7 +19,6 @@ class Space(object):
         if not set(self.folded_axes) == set(self._extents.keys()):
             raise ValueError("Cannot construct a space with axes={} and extents={}".format(self.axes, self.extents))
 
-        self._masked_axis = dict(masked_axis)
     # This interface must be implemented by subclasses.
 
     def fold(self, X):
@@ -49,7 +48,7 @@ class Space(object):
 
         # short path for when there is no transposing
         if self.folded_axes == _fold_axes(new_axes):
-            new_space = self.__class__(new_axes, self.extents, **self._masked_axis)
+            new_space = self.__class__(new_axes, self.extents)
             X = new_space.unfold(X)
             if len(broadcast) > 0:
                 # broadcast any of the requested axes
@@ -112,7 +111,7 @@ class Space(object):
 
         new_extents = dict((axis, self._extents[axis]) for axis in _fold_axes(new_axes))
 
-        return self.__class__(new_axes, new_extents, **self._masked_axis)
+        return self.__class__(new_axes, new_extents)
 
     # @profile
     def with_axes(self, axes):
@@ -136,7 +135,7 @@ class Space(object):
         expanded_extents = self.extents
         expanded_extents.update((ax, 1) for ax in new_axes)
 
-        return self.__class__(expanded_axes, expanded_extents, **self._masked_axis)
+        return self.__class__(expanded_axes, expanded_extents)
 
     def without_axes(self, axes_to_remove):
         """
@@ -192,7 +191,7 @@ class Space(object):
 
         contracted_axes = tuple(contracted_axes)
 
-        return self.__class__(contracted_axes, contracted_extents,**self._masked_axis)
+        return self.__class__(contracted_axes, contracted_extents)
 
     def with_extents(self, **extents_to_change):
         """
@@ -210,7 +209,7 @@ class Space(object):
 
             new_extents[ax] = ex
 
-        return self.__class__(self.axes, new_extents, **self._masked_axis)
+        return self.__class__(self.axes, new_extents)
 
     def rename_axes(self, **renames):
         """
@@ -237,10 +236,10 @@ class Space(object):
                 renamed_axes.append(renames.get(axis, axis))
         renamed_axes = tuple(renamed_axes)
 
-        return self.__class__(renamed_axes, renamed_extents, **self._masked_axis)
+        return self.__class__(renamed_axes, renamed_extents)
 
     def folded(self):
-        return self.__class__(self.folded_axes, self.extents, **self._masked_axis)
+        return self.__class__(self.folded_axes, self.extents)
 
     def is_compatible_shape(self, X):
         """
@@ -289,10 +288,6 @@ class Space(object):
     def extents(self):
         return dict(self._extents)
 
-    @property
-    def masked_axis(self):
-        return dict(self._masked_axis)
-
     def get_extent(self, axis):
         """
         Get the extent of any single unfolded axis.  The needs to be unfolded (no nested tuples allowed).
@@ -326,67 +321,11 @@ class Space(object):
         return tuple(self.get_extent(ax) for ax in _fold_axes(self._axes))
 
     def __repr__(self):
-        return "{}(axes={}, extents=[{}], masked_axis={})".format(
+        return "{}(axes={}, extents=[{}])".format(
             self.__class__.__name__,
             self.axes,
-            ",".join("{}={}".format(k, v) for k, v in self._extents.iteritems()),
-            self.masked_axis
+            ",".join("{}={}".format(k, v) for k, v in self._extents.iteritems())
         )
-
-    def mask_axis(self, axis, axes):
-        #FIXME: Make sure this method does not fail in incompatible spaces
-        #WARKING: Can only mask two axis that are adjecant in the representation. Eg. in (a,b,c),d cannot mask
-        # a,c but only a,b or b,c or the whole a,b,c
-        masked_axis=[]
-        new_extent = 1
-        new_space=self
-        for ax in axis:
-            axes_extent=self.get_extent(ax)
-            masked_axis.append((ax,axes_extent))
-            new_extent=new_extent*axes_extent
-            if ax==axis[len(axis)-1]:
-                new_space = new_space.rename_axes(**{ax:axes})
-            else:
-                new_space = new_space.without_axes(ax)
-        new_space=new_space.with_extents(**{axes:new_extent})
-
-
-        return self.__class__(new_space.axes, new_space.extents, **dict({axes:masked_axis}.items()+self._masked_axis.items()))
-
-    def unmask_axes(self, axes):
-        #TODO: Do not assume the shape of the space is the correct 2d one. Check that before
-        #TODO: Currently the dimension is unmaskable if it is uniquely on 1 of the 2d dimensions. Eg. Cannot unmask b in (b,c),d
-        #TODO: In need of a lot of synthesizing
-
-        if self._masked_axis.get(axes) is None:
-            raise ValueError("Cannot unmask. Axes={} is not masking any other axis.".format(axes))
-
-        new_axes = []
-        for ax in self.axes:
-            if ax==axes:
-                self.extents.pop(axes)
-                temp=[]
-                for (ax_name, ax_xt) in self._masked_axis[axes]:
-                    temp.append(ax_name)
-                new_axes.append(tuple(temp))
-            else:
-                new_axes.append(ax)
-
-        self.extents.pop(axes)
-
-        temp = self.__class__(_canonical_axis_description(new_axes), extents=None, **self._masked_axis)
-        for (ax_name, ax_xt) in self._masked_axis[axes]:
-            temp=temp.with_extents(**{ax_name:ax_xt})
-        for (ax_name, ax_xt) in self._extents.iteritems():
-            if ax_name!=axes:
-                temp=temp.with_extents(**{ax_name:ax_xt})
-
-        self._masked_axis.pop(axes)
-
-        temp = self.__class__(temp._axes, temp._extents, **self._masked_axis)
-
-        return temp
-
 
 def _canonical_axis_description(axis):
     if isinstance(axis, basestring):

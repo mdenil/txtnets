@@ -107,3 +107,7 @@ class AxisReduction(generic.model.transfer.AxisReduction, layer.Layer):
 
     # bprop is generic
     # no grads
+
+
+class ReshapeForDocuments(generic.model.transfer.ReshapeForDocuments, layer.Layer):
+    Space = space.CPUSpace

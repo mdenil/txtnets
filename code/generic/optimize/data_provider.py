@@ -262,20 +262,13 @@ class LabelledDocumentMinibatchProvider(object):
         meta = {
             'lengths': sentence_lengths,
             'lengths2': document_lengths,
+            'padded_sentence_length':  max_n_sentences,
             'space_below': cpu.space.CPUSpace(
-                axes=(('b', 's'), 'w'),
+                axes=('b', 'w'),
                 extents={
-                    'b': dimension_b,
-                    's': max_n_sentences,
+                    'b': dimension_b * max_n_sentences,
                     'w': max_n_words,
                 }),
-            'space_above': cpu.space.CPUSpace(
-                axes=[('b', 's'), 'w'],
-                extents={
-                    'b': dimension_b,
-                    's': max_n_sentences,
-                    'w': max_n_words,
-                })
         }
 
         return X_batch, Y_batch, meta
@@ -302,18 +295,3 @@ class LabelledDocumentMinibatchProvider(object):
             return x + [['PADDING']] * (max_length - len(x))
         else:
             return x[:max_length]
-
-    def split(self, x):
-        return self.do_split(x, [])
-
-    def do_split(self, x, y):
-        try:
-            index = x.index('.')
-            y.append(x[:index+1])
-            if index + 1 == len(x):
-                return y
-            else:
-                return self.do_split(x[index+1:], y)
-        except ValueError:
-            y.append(x)
-            return y

@@ -192,3 +192,7 @@ class AxisReduction(generic.model.transfer.AxisReduction, layer.Layer):
         cpu_class = get_cpu_analog(self.__class__)
 
         return cpu_class(axis=self.axis)
+
+
+class ReshapeForDocuments(generic.model.transfer.ReshapeForDocuments, layer.Layer):
+    Space = space.GPUSpace

@@ -369,181 +369,46 @@ class AxisReduction(object):
 
         return delta, meta
 
-class DocumentConvolution(object):
-    #TODO: Make this generic. A.k.a remove _from etc. Also remove conv import.
-    def __init__(self,
-                 n_feature_maps,
-                 kernel_width,
-                 n_input_dimensions,
-                 n_channels,
-                 n_threads=psutil.NUM_CPUS,
-                 W=None):
 
-        self.n_feature_maps = n_feature_maps
-        self.kernel_width = kernel_width
-        self.n_input_dimensions = n_input_dimensions
-        self.n_channels = n_channels
-        self.n_threads = n_threads
 
-        if W is None:
-            self.W = 0.1 * np.random.standard_normal(
-                size=(n_input_dimensions, n_feature_maps, n_channels, kernel_width))
-            self._kernel_space = cpu.space.CPUSpace.infer(self.W, ('d', 'f', 'c', 'w'))
-            self.W, self._kernel_space = self._kernel_space.transform(self.W, [('b', 'd', 'f', 'c'), 'w'])
-        else:
-            # :(
-            assert W.shape == (n_input_dimensions * n_feature_maps * n_channels, kernel_width)
-            self.W = W
-            self._kernel_space = cpu.space.CPUSpace(
-                (('b', 'd', 'f', 'c'), 'w'),
-                collections.OrderedDict([
-                    ('b', 1),
-                    ('d', n_input_dimensions),
-                    ('f', n_feature_maps),
-                    ('c', n_channels),
-                    ('w', kernel_width)
-                ]))
-
+class ReshapeForDocuments(object):
     def fprop(self, X, meta):
-
-        # Things go wrong if the w extent of X is smaller than the kernel width... for now just don't do that.
-        if meta['space_below'].get_extent('w') < self.kernel_width:
-            raise ValueError("SentenceConvolution does not support input with w={} extent smaller than kernel_width={}".format(
-                meta['space_below'].get_extent('w'),
-                self.kernel_width
-            ))
-
         working_space = meta['space_below']
 
-        #TRYING TO RECOVER SPACE
-        #TODO: Axis should maintin order after MASK, FIX THIS IN SPACES MASK
-        X, working_space = meta['space_below'].transform(X, ('b', ('d', 'f', 'w')))
-        working_space = working_space.mask_axis(('d', 'f', 'w'), 'f')
-        working_space = working_space.transposed(('b', 'f'))
-        working_space = working_space.unmask_axes('b')
-        working_space = working_space.rename_axes(s='w')
-        X, working_space = working_space.transform(X, (('b','f'),'w'))
-        #END OF RECOVERY
+        assert working_space.get_extent('b') % meta['padded_sentence_length'] == 0
 
-        lengths = meta['lengths2']
-
-        # features in the input space become channels here
-        if 'f' in working_space.folded_axes:
-            working_space = working_space.rename_axes(f='c')
-        else:
-            X, working_space = working_space.add_axes(X, 'c')
+        X, working_space = working_space.transform(X, ('b2', 'b', 'd', 'f', 'w'))
+        working_space = working_space.with_extents(
+            b2=working_space.get_extent('b') // meta['padded_sentence_length'],
+            b=meta['padded_sentence_length'])
+        X = working_space.unfold(X)
+        X, working_space = working_space.transform(X, ('b2', ('d', 'f', 'w'), 'b'))
 
         fprop_state = {
-            'input_space': working_space,
-            'X': X,
-            'lengths_below': lengths.copy()
+            'backwards_space': working_space,
+            'lengths_below': meta['lengths'].copy(),
         }
 
-        b, d, c, w = working_space.get_extents(('b', 'd', 'c', 'w'))
-
-        if not self.n_channels == c:
-            raise ValueError("n_chanels={} but the data has {} channels.".format(self.n_channels, c))
-        if not self.n_input_dimensions == d:
-            raise ValueError("n_input_dimensions={} but the data has {} dimensions.".format(self.n_input_dimensions, d))
-        f = self.n_feature_maps
-
-        X, working_space = working_space.transform(X, (('b', 'd', 'f', 'c'), 'w'), f=f)
-
-        X, working_space = self._fprop(X, working_space)
-
-        # length of a wide convolution
-        lengths = lengths + self.kernel_width - 1
+        working_space = self.__class__.Space.infer(X, ('b', 'f', 'w'))
 
         meta['space_above'] = working_space
-        meta['lengths'] = lengths
+        meta['lengths'] = meta['lengths2']
 
         return X, meta, fprop_state
 
     def bprop(self, delta, meta, fprop_state):
-        working_space = meta['space_above']
-        lengths = meta['lengths']
-        X_space = fprop_state['input_space']
+        working_space = fprop_state['backwards_space']
+        delta = working_space.unfold(delta)
 
-        delta, working_space = working_space.transform(
-            delta,
-            (('b', 'd', 'f', 'c'), 'w'),
-            c=X_space.get_extent('c'))
-
-        delta, working_space = self._bprop(delta, working_space)
-
-        #HERE WE SHOULD RECOVER THE SPACES
-        working_space = working_space.rename_axes(w='s')
-        delta, working_space = working_space.transform(delta, (('b','s'),'f'))
-        working_space = working_space.mask_axis(('b','s'),'b')
-        working_space = working_space.unmask_axes('f')
-        #RECOVERY COMPLETED
-
-        delta, working_space = working_space.transform(delta, (('b', 'd', 'f'), 'w'))
-
-        lengths = lengths - self.kernel_width + 1
+        delta, working_space = working_space.transform(delta, ('b2', 'b', 'd', 'f', 'w'))
+        working_space = working_space.with_extents(
+            b2=1,
+            b=working_space.get_extent('b2') * working_space.get_extent('b'),
+        )
+        delta = working_space.unfold(delta)
+        delta, working_space = working_space.transform(delta, ('b', 'd', 'f', 'w'))
 
         meta['space_below'] = working_space
-        meta['lengths'] = lengths
+        meta['lengths'] = fprop_state['lengths_below']
 
         return delta, meta
-
-    def grads(self, delta, meta, fprop_state):
-        delta_space = meta['space_above']
-        X = fprop_state['X']
-        X_space = fprop_state['input_space']
-
-        delta, delta_space = delta_space.transform(
-            delta,
-            (('b', 'd', 'f', 'c'), 'w'),
-            c=X_space.get_extent('c'))
-        X, X_space = X_space.transform(
-            X,
-            (('b', 'd', 'f', 'c'), 'w'),
-            f=delta_space.get_extent('f'))
-
-        return self._grads(delta, delta_space, X)
-
-    def params(self):
-        return [self.W]
-
-    def __repr__(self):
-        return "{}(W={})".format(
-            self.__class__.__name__,
-            self.W.shape)
-
-    def _fprop(self, X, X_space):
-        K, _ = self._kernel_space.broadcast(np.fliplr(self.W), b=X_space.get_extent('b'))
-        X = conv.fftconv1d(X, K, n_threads=self.n_threads)
-
-        X_space = X_space.with_extents(w=X.shape[1])
-
-        X, X_space = X_space.transform(X, (('b', 'd', 'f'), 'c', 'w'))
-        X = X.sum(axis=X_space.axes.index('c'))
-        X_space = X_space.without_axes('c')
-
-        return X, X_space
-
-    def _bprop(self, delta, delta_space):
-        K, _ = self._kernel_space.broadcast(self.W, b=delta_space.get_extent('b'))
-
-        delta = conv.fftconv1d(delta, K, n_threads=self.n_threads, mode='valid')
-        delta_space = delta_space.with_extents(w=delta.shape[1])
-
-        delta, delta_space = delta_space.transform(delta, delta_space.folded_axes)
-        delta = delta.sum(axis=delta_space.axes.index('f'))
-        delta_space = delta_space.without_axes('f')
-        delta_space = delta_space.rename_axes(c='f')
-
-        return delta, delta_space
-
-    def _grads(self, delta, delta_space, X):
-        grad_W = conv.fftconv1d(np.fliplr(delta), X, n_threads=self.n_threads, mode='valid')
-        grad_W_space = delta_space.with_extents(w=grad_W.shape[1])
-
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, grad_W_space.folded_axes)
-
-        grad_W = grad_W.sum(axis=grad_W_space.axes.index('b'))
-        grad_W_space = grad_W_space.without_axes('b')
-        grad_W, grad_W_space = grad_W_space.transform(grad_W, [('b', 'd', 'f', 'c'), 'w'])
-
-        return [grad_W]

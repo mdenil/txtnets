@@ -11,6 +11,7 @@ import cpu.model.cost
 
 model = cpu.model
 
+
 class Softmax(unittest.TestCase):
     def setUp(self):
         # X = ['w', 'f', 'd', 'b']
@@ -230,7 +231,6 @@ class SentenceConvolution(unittest.TestCase):
         assert scipy.optimize.check_grad(func, grad, self.layer.W.ravel()) < 1e-5
 
 
-
 class Linear(unittest.TestCase):
     def setUp(self):
         b,w,f,d = 2, 20, 2, 2
@@ -285,3 +285,27 @@ class Linear(unittest.TestCase):
 
         assert scipy.optimize.check_grad(func, grad, self.layer.W.ravel()) < 1e-5
 
+
+class ReshapeForDocuments(unittest.TestCase):
+    def setUp(self):
+        b, d, f, w = 15, 1, 3, 14
+        self.padded_sentence_length = 5
+        self.model = model.transfer.ReshapeForDocuments()
+
+        self.X = np.random.standard_normal(size=(b, d, f, w))
+        self.X_space = space.CPUSpace.infer(self.X, ('b', 'd', 'f', 'w'))
+
+        self.meta = {
+            'lengths': np.random.randint(1, w, size=b),
+            'space_below': self.X_space,
+            'padded_sentence_length': self.padded_sentence_length,
+            'lengths2': np.random.randint(1, self.padded_sentence_length, size=b // self.padded_sentence_length)
+        }
+
+    def test_bprop(self):
+        Y, meta, state = self.model.fprop(self.X, meta=dict(self.meta))
+        X, meta = self.model.bprop(Y, meta=dict(meta), fprop_state=state)
+
+        X, _ = meta['space_below'].transform(X, self.X_space.axes)
+
+        self.assertTrue(np.allclose(X, self.X))
