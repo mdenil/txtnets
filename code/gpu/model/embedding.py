@@ -62,7 +62,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
     def _fprop(self, X):
         out = pycuda.gpuarray.empty((X.size, self.E.shape[1]), dtype=np.float32)
 
-        rows_per_block = self.__class__.block_size // self.E.shape[1] + 1
+        rows_per_block = self.__class__.block_size // self.E.shape[1]
         num_blocks = self.E.shape[0] // rows_per_block + 1
 
         self._fprop_kernel(
@@ -98,7 +98,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
     def _grads(self, delta, X):
         grad_E = pycuda.gpuarray.zeros_like(self.E)
 
-        rows_per_block = self.__class__.block_size // self.E.shape[1] + 1
+        rows_per_block = self.__class__.block_size // self.E.shape[1]
         num_blocks = self.E.shape[0] // rows_per_block + 1
 
         self._grads_kernel(
