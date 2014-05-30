@@ -36,7 +36,8 @@ def extract_data(input_file_name, output_file_name):
 
 @ruffus.split(
     extract_data,
-    ["stanfordmovie.train.json", "stanfordmovie.test.json", "stanfordmovie.unsup.json"])
+    ["stanfordmovie.train.json", "stanfordmovie.test.json"])
+    # ["stanfordmovie.train.json", "stanfordmovie.test.json", "stanfordmovie.unsup.json"])
 def create_jsons(input_file_name, output_file_names):
     #TODO: 1. Make filename dynamic
     #---------------------
@@ -243,8 +244,8 @@ def project_sentences(input_file_names, output_file_name):
     with open(review_file_name) as review_file:
         reviews = json.load(review_file)
 
-    dictionary_file_name.replace('test', 'train')
-    dictionary_file_name.replace('unsup', 'train')
+    dictionary_file_name = dictionary_file_name.replace('test', 'train')
+    dictionary_file_name = dictionary_file_name.replace('unsup', 'train')
 
 
     with open(dictionary_file_name) as dictionary_file:
