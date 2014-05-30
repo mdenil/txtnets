@@ -14,6 +14,8 @@ from cpu.optimize.update_rule import AdaGrad
 from cpu.optimize.sgd import SGD
 from cpu.optimize.data_provider import LabelledDocumentMinibatchProvider
 
+import cpu.model.dropout
+
 import experiment_config
 
 def run():
@@ -82,6 +84,7 @@ def run():
     for batch_index, iteration_info in enumerate(optimizer):
         if batch_index % {{validation_frequency}} == 0:
 
+            model_nodropout = cpu.model.dropout.remove_dropout(model)
             Y_hat = []
             Y_valid = []
             for _ in xrange(validation_data_provider.batches_per_epoch):
@@ -89,7 +92,7 @@ def run():
                 X_valid_batch = X_valid_batch
                 Y_valid_batch = Y_valid_batch
                 Y_valid.append(Y_valid_batch)
-                Y_hat.append(model.fprop(X_valid_batch, meta=meta_valid))
+                Y_hat.append(model_nodropout.fprop(X_valid_batch, meta=meta_valid))
             Y_valid = np.concatenate(Y_valid, axis=0)
             Y_hat = np.concatenate(Y_hat, axis=0)
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
