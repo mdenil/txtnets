@@ -5,54 +5,10 @@ import scipy.optimize
 import pyprind
 import os
 import time
-import gzip
 import random
 import simplejson as json
 import cPickle as pickle
-import matplotlib.pyplot as plt
-from nltk.tokenize import WordPunctTokenizer
 
-from collections import OrderedDict
-
-from cpu.model.model import CSM
-from cpu.model.encoding import DictionaryEncoding
-from cpu.model.embedding import WordEmbedding
-from cpu.model.transfer import SentenceConvolution
-from cpu.model.transfer import Bias
-from cpu.model.pooling import SumFolding
-from cpu.model.pooling import MaxFolding
-from cpu.model.pooling import KMaxPooling
-from cpu.model.nonlinearity import Tanh
-from cpu.model.nonlinearity import Relu
-from cpu.model.transfer import Softmax
-from cpu.model.transfer import Linear
-
-from cpu import space
-from cpu.model import layer
-
-from cpu.model.cost import CrossEntropy
-from cpu.model.cost import LargeMarginCost
-
-from cpu.optimize.data_provider import MinibatchDataProvider
-from cpu.optimize.data_provider import BatchDataProvider
-from cpu.optimize.data_provider import PaddedSequenceMinibatchProvider
-
-from cpu.optimize.objective import CostMinimizationObjective
-
-from cpu.optimize.regularizer import L2Regularizer
-
-from cpu.optimize.update_rule import AdaGrad
-from cpu.optimize.update_rule import AdaDelta
-from cpu.optimize.update_rule import Basic
-from cpu.optimize.update_rule import NesterovAcceleratedGradient
-from cpu.optimize.update_rule import Momentum
-
-from cpu.optimize.data_provider import LabelledSequenceMinibatchProvider
-
-from cpu.optimize.grad_check import ModelGradientChecker
-
-from cpu.optimize.sgd import SGD
-from generic.model.transfer import DocumentConvolution
 from generic.optimize.data_provider import LabelledDocumentMinibatchProvider
 
 if __name__ == "__main__":
@@ -63,29 +19,32 @@ if __name__ == "__main__":
     # LOADING
     tweets_dir = os.path.join("../data", "stanfordmovie")
 
-    with open(os.path.join(tweets_dir, "stanfordmovie.test.clean.json")) as data_file:
+    with open(os.path.join(tweets_dir, "stanfordmovie.test.sentences.clean.projected.json")) as data_file:
         data = json.loads(data_file.read())
         random.shuffle(data)
         X, Y = map(list, zip(*data))
         Y = [[":)", ":("].index(y) for y in Y]
 
-    with open(os.path.join(tweets_dir, "stanfordmovie.train.clean.dictionary.encoding.json")) as alphabet_file:
+    with open(os.path.join(tweets_dir, "stanfordmovie.train.sentences.clean.dictionary.encoding.json")) as \
+            alphabet_file:
         alphabet = json.loads(alphabet_file.read())
 
-    tokenizer = WordPunctTokenizer()
-    new_X = []
-    for x in X:
-        new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
-    X = new_X
+    # tokenizer = WordPunctTokenizer()
+    # new_X = []
+    # for x in X:
+    #     new_X.append([w if w in alphabet else 'UNKNOWN' for w in tokenizer.tokenize(x)])
+    # X = new_X
 
 
     evaluation_data_provider = LabelledDocumentMinibatchProvider(
         X=X,
         Y=Y,
-        batch_size=8,
-        padding='PADDING')
+        batch_size=50,
+        padding='PADDING',
+        fixed_n_sentences=15,
+        fixed_n_words=50)
 
-    model_file = "model_updated_save2.pkl"
+    model_file = "/home/mdenil/code/txtnets/txtnets_deployed/results/test_job_launcher/00000075/model_best.pkl"
     with open(model_file) as model_file:
         trained_model = pickle.load(model_file)
 
