@@ -6,6 +6,7 @@ import cpu.model.layer
 from cpu.model.model import CSM
 from cpu.model.transfer import SentenceConvolution
 from cpu.model.transfer import Softmax
+from cpu.model.transfer import Linear
 
 class Dropout(cpu.model.layer.Layer):
     def __init__(self, axes, dropout_rate):
@@ -63,9 +64,15 @@ def _softmax(smax, ratio):
     new_smax = Softmax(n_classes=smax.n_classes,
                        n_input_dimensions=smax.n_input_dimensions)
 
-    new_smax.W = smax.W * (1-ratio)
-    new_smax.b = smax.b
+    new_smax.W = smax.W.copy() * (1-ratio)
+    new_smax.b = smax.b.copy()
     return new_smax
+
+def _linear(linear, ratio):
+    new_linear = Linear(n_input=linear.n_input, n_output=linear.n_output)
+
+    new_linear.W = linear.W * (1-ratio)
+    return new_linear
 
 def _sentence_convolution(conv_layer, ratio):
     new_conv = SentenceConvolution(
@@ -74,7 +81,7 @@ def _sentence_convolution(conv_layer, ratio):
                 n_channels=conv_layer.n_channels,
                 n_input_dimensions=conv_layer.n_input_dimensions)
 
-    new_conv.W = conv_layer.W * (1-ratio)
+    new_conv.W = conv_layer.W.copy() * (1-ratio)
     return new_conv
 
 def _identity(layer, ratio):
@@ -83,6 +90,7 @@ def _identity(layer, ratio):
 __function_mapping = {
     'Softmax' : _softmax,
     'SentenceConvolution' : _sentence_convolution,
+    'Linear': _linear,
     'Tanh' : _identity,
     'Bias' : _identity,
     'MaxFolding' : _identity,
