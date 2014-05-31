@@ -4,7 +4,8 @@ from cpu.space import CPUSpace
 import numpy as np
 import cpu.model.layer
 from cpu.model.model import CSM
-
+from cpu.model.transfer import SentenceConvolution
+from cpu.model.transfer import Softmax
 
 class Dropout(cpu.model.layer.Layer):
     def __init__(self, axes, dropout_rate):
@@ -59,12 +60,22 @@ class Dropout(cpu.model.layer.Layer):
             self.dropout_rate)
 
 def _softmax(smax, ratio):
-    smax.W = smax.W * (1-ratio)
-    return smax
+    new_smax = Softmax(n_classes=smax.n_classes,
+                       n_input_dimensions=smax.n_input_dimensions)
+
+    new_smax.W = smax.W * (1-ratio)
+    new_smax.b = smax.b
+    return new_smax
 
 def _sentence_convolution(conv_layer, ratio):
-    conv_layer.W = conv_layer.W * (1-ratio)
-    return conv_layer
+    new_conv = SentenceConvolution(
+                n_feature_maps=conv_layer.n_feature_maps,
+                kernel_width=conv_layer.kernel_width,
+                n_channels=conv_layer.n_channels,
+                n_input_dimensions=conv_layer.n_input_dimensions)
+
+    new_conv.W = conv_layer.W * (1-ratio)
+    return new_conv
 
 def _identity(layer, ratio):
     return layer
