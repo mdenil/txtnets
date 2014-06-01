@@ -63,7 +63,7 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
         out = pycuda.gpuarray.empty((X.size, self.E.shape[1]), dtype=np.float32)
 
         rows_per_block = self.__class__.block_size // self.E.shape[1]
-        num_blocks = self.E.shape[0] // rows_per_block + 1
+        num_blocks = X.shape[0] // rows_per_block + 1
 
         self._fprop_kernel(
             self.E,
@@ -83,6 +83,8 @@ class WordEmbedding(generic.model.embedding.WordEmbedding, gpu.model.layer.Layer
         # this kernel uses one thread per row because it needs to accumulate
         rows_per_block = self.__class__.block_size
         num_blocks = delta.shape[0] // rows_per_block + 1
+
+        assert delta.shape[0] == Y.shape[0]
 
         self._bprop_kernel(
             delta,
