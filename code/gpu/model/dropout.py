@@ -1,29 +1,58 @@
-__author__ = 'albandemiraj, mdenil'
+__author__ = 'mdenil'
 
 import numpy as np
-import cpu.space
-import cpu.model.layer
+
+import gpu.space
+import gpu.model.layer
 import generic.model.dropout
-from cpu.model.model import CSM
-from cpu.model.transfer import SentenceConvolution
-from cpu.model.transfer import Softmax
-from cpu.model.transfer import Linear
+
+from gpu.model.model import CSM
+from gpu.model.transfer import SentenceConvolution
+from gpu.model.transfer import Softmax
+from gpu.model.transfer import Linear
+
+import pycuda.autoinit
+import pycuda.curandom
+
+_dropout_mask_kernel = pycuda.elementwise.ElementwiseKernel(
+    "float *x, float q",  # q is the keep probability (i.e. 1-p)
+    "x[i] = (float)(x[i] < q)",
+    "dropout_mask")
 
 
-class Dropout(generic.model.dropout.Dropout, cpu.model.layer.Layer):
+class Dropout(generic.model.dropout.Dropout, gpu.model.layer.Layer):
+    def __init__(self, *args, **kwargs):
+        super(Dropout, self).__init__(*args, **kwargs)
+        self.__acquire_device_kernels()
+
     def _get_mask(self, shape):
-        mask = np.random.uniform(size=shape) < (1.0 - self.dropout_rate)
-        mask_space = cpu.space.CPUSpace.infer(mask, self.axes)
+        mask = pycuda.gpuarray.empty(shape=shape, dtype=np.float32)
+        self._rng.fill_uniform(mask)
+        _dropout_mask_kernel(mask, np.float32(1.0 - self.dropout_rate))
+
+        mask_space = gpu.space.GPUSpace.infer(mask, self.axes)
+
         return mask, mask_space
 
-    # bprop is generic
-    # no grads
+    def __acquire_device_kernels(self):
+        self._rng = pycuda.curandom.MRG32k3aRandomNumberGenerator()
 
-    def __repr__(self):
-        return "{}(R={})".format(
-            self.__class__.__name__,
-            self.dropout_rate)
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_rng']
+        return state
 
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__acquire_device_kernels()
+
+    def move_to_cpu(self):
+        from gpu.model.host_device_component_mapping import get_cpu_analog
+        cpu_class = get_cpu_analog(self.__class__)
+
+        return cpu_class(
+            axes=self.axes,
+            dropout_rate=self.dropout_rate)
 
 def _remove_dropout_softmax(smax, ratio):
     new_smax = Softmax(
