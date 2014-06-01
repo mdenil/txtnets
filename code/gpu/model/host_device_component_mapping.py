@@ -9,6 +9,7 @@ import cpu.model.nonlinearity
 import cpu.model.pooling
 import cpu.model.transfer
 import cpu.model.transport
+import cpu.model.dropout
 
 import gpu.model.cost
 import gpu.model.embedding
@@ -18,6 +19,7 @@ import gpu.model.nonlinearity
 import gpu.model.pooling
 import gpu.model.transfer
 import gpu.model.transport
+import gpu.model.dropout
 
 
 __host_device_component_mapping = {
@@ -42,9 +44,12 @@ __host_device_component_mapping = {
     cpu.model.transfer.SentenceConvolution: gpu.model.transfer.SentenceConvolution,
     cpu.model.transfer.Softmax: gpu.model.transfer.Softmax,
     cpu.model.transfer.AxisReduction: gpu.model.transfer.AxisReduction,
+    cpu.model.transfer.ReshapeForDocuments: gpu.model.transfer.ReshapeForDocuments,
 
-    gpu.model.transport.HostToDevice: cpu.model.transport.HostToDevice,
-    gpu.model.transport.DeviceToHost: cpu.model.transport.DeviceToHost,
+    cpu.model.transport.HostToDevice: gpu.model.transport.HostToDevice,
+    cpu.model.transport.DeviceToHost: gpu.model.transport.DeviceToHost,
+
+    cpu.model.dropout.Dropout: gpu.model.dropout.Dropout,
 }
 
 __device_host_component_mapping = dict(
