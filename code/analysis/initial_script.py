@@ -34,19 +34,19 @@ def run():
             with open(os.path.join(progress_dir, result_folder, 'progress.pkl')) as file:
                 progress_dict = pickle.load(file)
         except IOError:
-            pass
+            progress_dict = {}
 
         try:
             with open(os.path.join(progress_dir, result_folder, 'params_train.yaml'), "r") as stream:
                 params_train_dict = yaml.load(stream)
         except IOError:
-            pass
+            params_train_dict = {}
 
         try:
             with open(os.path.join(progress_dir, result_folder, 'params_experiment_config.yaml'), "r") as stream:
                 params_experiment_dict = yaml.load(stream)
         except IOError:
-            pass
+            params_experiment_dict = {}
 
         if not (progress_dict or params_train_dict or params_experiment_dict):
             print "Failed to load from {}".format(result_folder)
