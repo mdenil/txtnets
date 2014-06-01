@@ -295,4 +295,5 @@ class LabelledDocumentMinibatchProvider(object):
         if max_length > len(x):
             return x + [['PADDING']] * (max_length - len(x))
         else:
-            return x[:max_length]
+            #return x[:max_length]
+            return x[0:max_length/2]+ x[max_length/2+len(x)-max_length:len(x)]
