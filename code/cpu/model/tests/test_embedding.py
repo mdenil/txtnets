@@ -34,7 +34,7 @@ class WordEmbedding(unittest.TestCase):
 
     def test_fprop(self):
         actual, meta, fprop_state = self.layer.fprop(self.words, meta=self.meta)
-        actual, _ = meta['space_above'].transform(actual, (('b', 'w'), 'd'))
+        actual, _ = meta['space_above'].transform(actual, (('b', 'w'), 'f'))
         expected = self.layer.E[self.words.ravel()]
         assert np.allclose(actual, expected)
 
