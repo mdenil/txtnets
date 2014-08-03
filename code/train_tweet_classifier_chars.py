@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
     # ~70% after 300 batches of 100, regularizer L2=1e-4 on tweets100k
     #
-    # tweet_model = CSM(
+    # model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=encoding),
     #
@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
     # Approximately Nal's model
     #
-    # tweet_model = CSM(
+    # model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=encoding),
     #
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     #         ]
     # )
 
-    # tweet_model = CSM(
+    # model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=encoding),
     #
@@ -343,7 +343,7 @@ if __name__ == "__main__":
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
             # This is really slow:
-            #grad_check = gradient_checker.check(tweet_model)
+            #grad_check = gradient_checker.check(model)
             grad_check = "skipped"
 
             acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid, axis=1))

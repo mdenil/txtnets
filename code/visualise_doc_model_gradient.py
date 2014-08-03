@@ -138,6 +138,7 @@ def get_model_output(model, X, Y, meta):
     delta, space = space.transform(delta, (('b','w'),'f'))
 
     #Reshaping input data
+    print meta.keys()
     Y_ = meta['Y']
     Y_space_ = meta['Y_space']
     Y_, Y_space_ = Y_space_.transform(Y_, (('b','w'),'f'))

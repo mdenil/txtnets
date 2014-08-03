@@ -107,9 +107,10 @@ safe_call conda_install nltk
 safe_call conda_install pandas
 safe_call conda_install beautiful-soup
 safe_call conda_install requests
-safe_call conda_install -c https://conda.binstar.org/richli fftw
-safe_call conda_install -c https://conda.binstar.org/richli pyfftw
-#safe_call pip_install pyfftw
+safe_call conda_install statsmodels patsy
+#safe_call conda_install -c https://conda.binstar.org/richli fftw
+#safe_call conda_install -c https://conda.binstar.org/richli pyfftw
+safe_call pip_install pyfftw
 safe_call pip_install pyprind
 safe_call pip_install --pre line_profiler
 safe_call pip_install ruffus

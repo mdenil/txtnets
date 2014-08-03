@@ -8,7 +8,6 @@ import time
 import random
 import simplejson as json
 import cPickle as pickle
-import matplotlib.pyplot as plt
 
 from cpu.model.model import CSM
 from cpu.model.encoding import DictionaryEncoding
@@ -19,6 +18,7 @@ from cpu.model.pooling import KMaxPooling
 from cpu.model.transfer import ReshapeForDocuments
 from cpu.model.nonlinearity import Tanh
 from cpu.model.transfer import Softmax
+from cpu.model.dropout import Dropout
 from cpu.model.cost import CrossEntropy
 from cpu.optimize.objective import CostMinimizationObjective
 from cpu.optimize.regularizer import L2Regularizer
@@ -70,81 +70,73 @@ if __name__ == "__main__":
         fixed_n_sentences=15,
         fixed_n_words=50)
 
-    # easy 90%
-    #
-    tweet_model = CSM(
+
+    model = CSM(
         layers=[
             DictionaryEncoding(vocabulary=encoding),
 
             WordEmbedding(
-                dimension=10,
+                dimension=20,
                 vocabulary_size=len(encoding),
                 padding=encoding['PADDING']),
 
+            Dropout(('b', 'w', 'f'), 0.2),
+
             SentenceConvolution(
-                n_feature_maps=6,
-                kernel_width=7,
+                n_feature_maps=10,
+                kernel_width=15,
+                n_channels=20,
+                n_input_dimensions=1),
+
+            Bias(
+                n_input_dims=1,
+                n_feature_maps=10),
+
+            KMaxPooling(k=7, k_dynamic=0.5),
+
+            Tanh(),
+
+            SentenceConvolution(
+                n_feature_maps=30,
+                kernel_width=9,
                 n_channels=10,
                 n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=6),
+                n_feature_maps=30),
 
-            # SumFolding(),
-
-            KMaxPooling(k=4, k_dynamic=0.5),
-
-            Tanh(),
-
-            SentenceConvolution(
-                n_feature_maps=14,
-                kernel_width=5,
-                n_channels=6,
-                n_input_dimensions=1),
-
-            Bias(
-                n_input_dims=1,
-                n_feature_maps=14),
-
-            # SumFolding(),
-
-            KMaxPooling(k=4),
+            KMaxPooling(k=5),
 
             Tanh(),
 
             ReshapeForDocuments(),
 
             SentenceConvolution(
-                n_feature_maps=10,
-                kernel_width=3,
-                n_channels=56,
+                n_feature_maps=20,
+                kernel_width=11,
+                n_channels=30*5,
                 n_input_dimensions=1),
-
-            # DocumentConvolution(
-            #     n_feature_maps=10,
-            #     kernel_width=3,
-            #     n_channels=56,
-            #     n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=10),
+                n_feature_maps=20),
 
-            # SumFolding(),
-
-            KMaxPooling(k=2),
+            KMaxPooling(k=5),
 
             Tanh(),
 
+            Dropout(('b', 'd', 'f', 'w'), 0.5),
+
             Softmax(
                 n_classes=2,
-                n_input_dimensions=20),
+                n_input_dimensions=100),
             ]
     )
 
 
-    # tweet_model = CSM(
+
+    # model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=encoding),
     #
@@ -214,7 +206,7 @@ if __name__ == "__main__":
     #         ]
     # )
 
-    # tweet_model = CSM(
+    # model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=encoding),
     #
@@ -286,7 +278,7 @@ if __name__ == "__main__":
     # )
 
 
-    # tweet_model = CSM(
+    # model = CSM(
     #     layers=[
     #         DictionaryEncoding(vocabulary=encoding),
     #
@@ -346,7 +338,7 @@ if __name__ == "__main__":
     #         ]
     # )
 
-    print tweet_model
+    print model
 
 
     cost_function = CrossEntropy()
@@ -360,10 +352,10 @@ if __name__ == "__main__":
 
     update_rule = AdaGrad(
         gamma=0.01,
-        model_template=tweet_model)
+        model_template=model)
 
     optimizer = SGD(
-        model=tweet_model,
+        model=model,
         objective=objective,
         update_rule=update_rule)
 
@@ -377,7 +369,7 @@ if __name__ == "__main__":
 
     progress = []
     costs = []
-    prev_weights = tweet_model.pack()
+    prev_weights = model.pack()
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
@@ -390,13 +382,13 @@ if __name__ == "__main__":
                 X_valid_batch = maybe_get(X_valid_batch)
                 Y_valid_batch = maybe_get(Y_valid_batch)
                 Y_valid.append(Y_valid_batch)
-                Y_hat.append(maybe_get(tweet_model.fprop(X_valid_batch, meta=meta_valid)))
+                Y_hat.append(maybe_get(model.fprop(X_valid_batch, meta=meta_valid)))
             Y_valid = np.concatenate(Y_valid, axis=0)
             Y_hat = np.concatenate(Y_hat, axis=0)
             assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
             # This is really slow:
-            #grad_check = gradient_checker.check(tweet_model)
+            #grad_check = gradient_checker.check(model)
             grad_check = "skipped"
 
             acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid, axis=1))
@@ -404,14 +396,14 @@ if __name__ == "__main__":
             if acc > best_acc:
                 best_acc = acc
                 with open("model_best.pkl", 'w') as model_file:
-                    pickle.dump(tweet_model, model_file, protocol=-1)
+                    pickle.dump(model, model_file, protocol=-1)
 
             current = dict()
             current['B']=batch_index
             current['A']=acc
             current['C']=costs[-1]
             current['Prop']=np.argmax(Y_hat, axis=1).mean()
-            current['Params']=np.mean(np.abs(tweet_model.pack()))
+            current['Params']=np.mean(np.abs(model.pack()))
             current['G']=grad_check
 
             progress.append(current)
@@ -424,7 +416,7 @@ if __name__ == "__main__":
 
         if batch_index % 100 == 0:
             with open("model.pkl", 'w') as model_file:
-                pickle.dump(tweet_model, model_file, protocol=-1)
+                pickle.dump(model, model_file, protocol=-1)
 
     time_end = time.time()
 

@@ -343,12 +343,12 @@ if __name__ == "__main__":
 
 
     # X, Y, meta = train_data_provider.next_batch()
-    # Y, meta, fprop_state = tweet_model.fprop(X, meta, return_state=True)
+    # Y, meta, fprop_state = model.fprop(X, meta, return_state=True)
 
     # print meta['lengths']
     # print Y.shape, meta['space_above']
 
-    # print [p.shape for p in tweet_model.params()]
+    # print [p.shape for p in model.params()]
 
     cost_function = CrossEntropy()
 

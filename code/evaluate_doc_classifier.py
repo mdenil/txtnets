@@ -9,6 +9,8 @@ import random
 import simplejson as json
 import cPickle as pickle
 
+import cpu.model.dropout
+
 from generic.optimize.data_provider import LabelledDocumentMinibatchProvider
 
 if __name__ == "__main__":
@@ -39,14 +41,14 @@ if __name__ == "__main__":
     evaluation_data_provider = LabelledDocumentMinibatchProvider(
         X=X,
         Y=Y,
-        batch_size=50,
-        padding='PADDING',
-        fixed_n_sentences=15,
-        fixed_n_words=50)
+        batch_size=10,
+        padding='PADDING')
+        # fixed_n_sentences=15,
+        # fixed_n_words=50)
 
-    model_file = "/home/mdenil/code/txtnets/txtnets_deployed/results/test_job_launcher/00000075/model_best.pkl"
+    model_file = "../results/model_best_stanfordmovie_92.4.pkl"
     with open(model_file) as model_file:
-        trained_model = pickle.load(model_file)
+        trained_model = cpu.model.dropout.remove_dropout(pickle.load(model_file))
 
     # PRINT USEFUL INFORMATION
     print evaluation_data_provider.batches_per_epoch

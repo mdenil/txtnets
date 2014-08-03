@@ -10,6 +10,7 @@ import simplejson as json
 import string
 from collections import Counter
 from nltk.tokenize import WordPunctTokenizer
+from nltk.tokenize.punkt import PunktSentenceTokenizer
 
 # http://www.cs.jhu.edu/~mdredze/datasets/sentiment/
 
@@ -60,6 +61,7 @@ def get_reviews(review_file_name, **extras):
 
     return review_infos
 
+
 @ruffus.transform([download_data], ruffus.suffix(".tar.gz"), ".json")
 def extract_reviews(input_file_name, output_file_name):
     # extracts to folder "sorted_data"
@@ -72,8 +74,8 @@ def extract_reviews(input_file_name, output_file_name):
         positive_file_name = os.path.join(raw_dir, category, "positive.review")
         negative_file_name = os.path.join(raw_dir, category, "negative.review")
 
-        positive_reviews = get_reviews(positive_file_name, disposition='positive', categroy=category)
-        negative_reviews = get_reviews(negative_file_name, disposition='negative', categroy=category)
+        positive_reviews = get_reviews(positive_file_name, label=':)', categroy=category)
+        negative_reviews = get_reviews(negative_file_name, label=':(', categroy=category)
 
         reviews.extend(positive_reviews)
         reviews.extend(negative_reviews)
@@ -87,45 +89,114 @@ def extract_reviews(input_file_name, output_file_name):
         output_file.write(u"\n")
 
 
-@ruffus.transform(extract_reviews, ruffus.suffix(".json"), ".clean.json")
-def clean_reviews(input_file_name, output_file_name):
+@ruffus.transform(extract_reviews, ruffus.suffix(".json"), ".sentences.json")
+def split_into_sentences(input_file_name, output_file_name):
+    with open(input_file_name) as input_file:
+        labelled_reviews = json.load(input_file)
+
+    tokenizer = PunktSentenceTokenizer()
+
+    tokenized_labelled_reviews = []
+
+    for review in labelled_reviews:
+        text = review['review_text']
+        label = review['label']
+        tokenized_labelled_reviews.append([tokenizer.tokenize(text), label])
+
+    with open(output_file_name, 'w') as sentence_file:
+        json.dump(tokenized_labelled_reviews, sentence_file)
+        sentence_file.write("\n")
+
+@ruffus.split(split_into_sentences, )
+
+@ruffus.transform(split_into_sentences, ruffus.suffix(".json"), ".clean.json")
+def clean_data(input_file_name, output_file_name):
     def clean_word(word):
+        word = word.encode('ascii', 'ignore')
         word = word.lower()
-        word = re.sub(r'(\S)\1+', r'\1\1', word) #normalize repeated characters to two
+        word = re.sub(r'(\S)\1+', r'\1\1', word)  # normalize repeated characters to two
         word = re.sub(r'(\S\S)\1+', r'\1\1', word)
-        if set(word) <= set(string.digits):
-            word = 'NUMBER'
+
+        if re.search(r'((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w-]*)?\??(?:[-\+=&;%@.\w]*)#?(?:[\w]*))?)',word) is not None:
+            word = 'GENERIC_HTTP'
+
         return word
 
     tokenizer = WordPunctTokenizer()
     data = []
     with open(input_file_name) as input_file:
-        for record in json.loads(input_file.read()):
-            record['review_text'] = " ".join(map(
-                clean_word, tokenizer.tokenize(record['review_text'])))
-            # record['review_text'] = " ".join(map(clean_word, record['review_text'].split()))
-            data.append(record)
+        for sentences, label in json.load(input_file):
+            cleaned_sentences = []
+            for sentence in sentences:
+                cleaned_sentence = " ".join(map(clean_word, sentence.split()))
+                cleaned_sentence = tokenizer.tokenize(cleaned_sentence)
+                cleaned_sentences.append(cleaned_sentence)
+
+            data.append([cleaned_sentences, label])
 
     with codecs.open(output_file_name, 'w', encoding='utf-8') as output_file:
         json.dump(data, output_file)
 
 
-@ruffus.transform(
-    [clean_reviews],
-    ruffus.suffix(".json"), ".dictionary.json")
-def build_word_dictionary(input_file_name, output_file_name):
-    dictionary = Counter()
-    tokenizer = WordPunctTokenizer()
-    with open(input_file_name) as input_file:
-        for review_info in json.loads(input_file.read()):
-            text = review_info['review_text']
-            dictionary.update(tokenizer.tokenize(text))
-
-    dictionary = list(sorted(w for w in dictionary if dictionary[w] >= 5)) + ['PADDING', 'UNKNOWN']
-
-    with open(output_file_name, 'w') as output_file:
-        json.dump(dictionary, output_file)
-        output_file.write(u"\n")
+# @ruffus.transform(
+#     clean_data,
+#     ruffus.suffix(".json"), ".dictionary.json")
+# def build_word_dictionary(input_file_name, output_file_name):
+#     dictionary = Counter()
+#     with open(input_file_name) as input_file:
+#         for sentences, label in json.loads(input_file.read()):
+#             for words in sentences:
+#                 dictionary.update(words)
+#
+#     dictionary = list(sorted(w for w in dictionary if dictionary[w] >= 5)) + ['PADDING', 'UNKNOWN']
+#
+#     with open(output_file_name, 'w') as output_file:
+#         json.dump(dictionary, output_file)
+#         output_file.write("\n")
+#
+#
+# @ruffus.follows(build_word_dictionary)
+# @ruffus.transform(
+#     clean_data,
+#     ruffus.suffix(".json"),
+#     ruffus.add_inputs(r"\1.dictionary.json"),
+#     ".projected.json")
+# def project_sentences(input_file_names, output_file_name):
+#     review_file_name, dictionary_file_name = input_file_names
+#
+#     with open(review_file_name) as review_file:
+#         reviews = json.load(review_file)
+#
+#     dictionary_file_name = dictionary_file_name.replace('test', 'train')
+#     dictionary_file_name = dictionary_file_name.replace('unsup', 'train')
+#
+#
+#     with open(dictionary_file_name) as dictionary_file:
+#         dictionary = json.load(dictionary_file)
+#
+#     def project_sentence(s):
+#         return [w if w in dictionary else "UNKNOWN" for w in s]
+#
+#     projected_reviews = []
+#     for sentences, label in reviews:
+#         projected_sentences = map(project_sentence, sentences)
+#         projected_reviews.append([projected_sentences, label])
+#
+#     with open(output_file_name, 'w') as output_file:
+#         json.dump(projected_reviews, output_file)
+#         output_file.write("\n")
+#
+#
+# @ruffus.transform([build_word_dictionary], ruffus.suffix(".json"), ".encoding.json")
+# def encode_dictionary(input_file_name, output_file_name):
+#     encoding = dict()
+#     with open(input_file_name) as input_file:
+#         for index, char in enumerate(json.load(input_file)):
+#             encoding[char] = index
+#
+#     with open(output_file_name, 'w') as output_file:
+#         json.dump(encoding, output_file)
+#         output_file.write("\n")
 
 
 if __name__ == "__main__":

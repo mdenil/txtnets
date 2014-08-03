@@ -28,6 +28,8 @@ from gpu.optimize.update_rule import AdaGrad
 from gpu.optimize.sgd import SGD
 from gpu.optimize.data_provider import LabelledDocumentMinibatchProvider
 
+import gpu.model.host_device_component_mapping
+
 import gpu.model.dropout
 
 
@@ -43,6 +45,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Tell me where to start from.")
     parser.add_argument("--model", help="load this model to start")
     parser.add_argument("--lr", type=float, help="new learning rate")
+    parser.add_argument("--out_folder")
     args = parser.parse_args()
 
     data_dir = os.path.join("../data", "stanfordmovie")
@@ -80,7 +83,7 @@ if __name__ == "__main__":
         fixed_n_words=50)
 
     with open(args.model) as model_file:
-        model = pickle.load(model_file)
+        model = gpu.model.host_device_component_mapping.move_to_gpu(pickle.load(model_file))
 
     print model
 
@@ -116,7 +119,7 @@ if __name__ == "__main__":
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        if batch_index % 100 == 0:
+        if batch_index % 10 == 0:
 
             model_valid = gpu.model.dropout.remove_dropout(model)
             Y_hat = []
@@ -135,12 +138,12 @@ if __name__ == "__main__":
 
             acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid, axis=1))
 
-            if acc > best_acc:
-                best_acc = acc
-                with open("model_best.pkl", 'w') as model_file:
-                    pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
+            # if acc > best_acc:
+            #     best_acc = acc
+            #     with open("model_best.pkl", 'w') as model_file:
+            #         pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
 
-            with open("model_{:06}.pkl".format(batch_index), 'w') as model_file:
+            with open(os.path.join(args.out_folder, "model_{:06}.pkl".format(batch_index)), 'w') as model_file:
                     pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
 
 

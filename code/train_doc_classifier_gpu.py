@@ -8,6 +8,7 @@ import time
 import random
 import simplejson as json
 import cPickle as pickle
+import argparse
 
 from gpu.model.model import CSM
 from gpu.model.encoding import DictionaryEncoding
@@ -39,13 +40,25 @@ if __name__ == "__main__":
     np.random.seed(2342)
     np.set_printoptions(linewidth=100)
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--save_dir", default=".")
+    parser.add_argument("--use_relabelled", action='store_const', default=False, const=True)
+    args = parser.parse_args()
+
     data_dir = os.path.join("../data", "stanfordmovie")
 
     with open(os.path.join(data_dir, "stanfordmovie.train.sentences.clean.projected.json")) as data_file:
         data = json.load(data_file)
-        random.shuffle(data)
-        X, Y = map(list, zip(*data))
-        Y = [[":)", ":("].index(y) for y in Y]
+
+    if args.use_relabelled:
+        with open(os.path.join(data_dir, "stanfordmovie.unsup.sentences.clean.projected.labelled.json")) as data_file:
+            data.extend(json.load(data_file))
+
+    random.shuffle(data)
+    X, Y = map(list, zip(*data))
+    Y = [[":)", ":("].index(y) for y in Y]
+
+    print len(X)
 
     with open(os.path.join(data_dir, "stanfordmovie.train.sentences.clean.dictionary.encoding.json")) as encoding_file:
         encoding = json.load(encoding_file)
@@ -83,31 +96,29 @@ if __name__ == "__main__":
                 vocabulary_size=len(encoding),
                 padding=encoding['PADDING']),
 
-            Dropout(('b', 'w', 'f'), 0.2),
+            Dropout(('b', 'f', 'w'), 0.2),
 
             SentenceConvolution(
-                n_feature_maps=10,
+                n_feature_maps=12,
                 kernel_width=15,
                 n_channels=20,
                 n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=10),
+                n_feature_maps=12),
 
             KMaxPooling(k=7, k_dynamic=0.5),
 
-            Tanh(),
-
             SentenceConvolution(
-                n_feature_maps=30,
-                kernel_width=9,
-                n_channels=10,
+                n_feature_maps=13,
+                kernel_width=6,
+                n_channels=12,
                 n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=30),
+                n_feature_maps=13),
 
             KMaxPooling(k=5),
 
@@ -116,34 +127,30 @@ if __name__ == "__main__":
             ReshapeForDocuments(),
 
             SentenceConvolution(
-                n_feature_maps=20,
-                kernel_width=11,
-                n_channels=30*5,
+                n_feature_maps=28,
+                kernel_width=13,
+                n_channels=13*5,
                 n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=20),
+                n_feature_maps=28),
 
             KMaxPooling(k=5),
 
             Tanh(),
 
-            # Dropout(('b', 'd', 'f', 'w'), 0.5),
-            #
-            # Linear(n_input=100, n_output=100),
-            #
-            # Bias(
-            #     n_input_dims=100,
-            #     n_feature_maps=1),
-            #
-            # Tanh(),
+            Dropout(('b', 'd', 'f', 'w'), 0.5),
+
+            Linear(n_input=28*5, n_output=28*5),
+
+            Bias(n_input_dims=28*5, n_feature_maps=1),
 
             Dropout(('b', 'd', 'f', 'w'), 0.5),
 
             Softmax(
                 n_classes=2,
-                n_input_dimensions=100),
+                n_input_dimensions=28*5),
             ]
     )
 
@@ -160,7 +167,7 @@ if __name__ == "__main__":
         regularizer=regularizer)
 
     update_rule = AdaGrad(
-        gamma=0.0025,
+        gamma=0.01,
         model_template=model)
 
     optimizer = SGD(
@@ -181,7 +188,7 @@ if __name__ == "__main__":
     for batch_index, iteration_info in enumerate(optimizer):
         costs.append(iteration_info['cost'])
 
-        if batch_index % 100 == 0:
+        if batch_index % 10 == 0:
 
             model_valid = gpu.model.dropout.remove_dropout(model)
             Y_hat = []
@@ -202,10 +209,10 @@ if __name__ == "__main__":
 
             if acc > best_acc:
                 best_acc = acc
-                with open("model_best.pkl", 'w') as model_file:
+                with open(os.path.join(args.save_dir, "model_best.pkl"), 'w') as model_file:
                     pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
 
-            with open("model_{:06}.pkl".format(batch_index), 'w') as model_file:
+            with open(os.path.join(args.save_dir, "model_{:06}.pkl".format(batch_index)), 'w') as model_file:
                     pickle.dump(model.move_to_cpu(), model_file, protocol=-1)
 
 
@@ -226,11 +233,11 @@ if __name__ == "__main__":
                 'batch': batch_index,
                 'validation_accuracy': acc,
                 'best_validation_accuracy': best_acc,
-                'cost': iteration_info['cost'],
+                'cost': iteration_info['cost'].get(),
                 'examples_per_hr': examples_per_hr,
             })
 
-            with open("progress.pkl", 'w') as progress_file:
+            with open(os.path.join(args.save_dir, "progress.pkl"), 'w') as progress_file:
                 pickle.dump(progress, progress_file, protocol=-1)
 
         # if batch_index == 1000:

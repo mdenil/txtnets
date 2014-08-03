@@ -1,7 +1,6 @@
 __author__ = 'mdenil'
 
 
-
 class Dropout(object):
     def __init__(self, axes, dropout_rate):
         self.axes = axes

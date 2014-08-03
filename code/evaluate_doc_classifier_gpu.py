@@ -6,8 +6,11 @@ import time
 import random
 import simplejson as json
 import cPickle as pickle
+import pyprind
+import argparse
 
 import gpu.model.dropout
+import gpu.model.host_device_component_mapping
 
 from gpu.optimize.data_provider import LabelledDocumentMinibatchProvider
 
@@ -16,58 +19,59 @@ def run():
     np.random.seed(2342)
     np.set_printoptions(linewidth=100)
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_file", default="model_best.pkl")
+    args = parser.parse_args()
+
     # LOADING
     data_dir = os.path.join("../data", "stanfordmovie")
 
-    with open(os.path.join(data_dir, "stanfordmovie.train.sentences.clean.projected.json")) as data_file:
+    with open(os.path.join(data_dir, "stanfordmovie.test.sentences.clean.projected.json")) as data_file:
         data = json.load(data_file)
         random.shuffle(data)
         X, Y = map(list, zip(*data))
         Y = [[":)", ":("].index(y) for y in Y]
 
-    with open(os.path.join(data_dir, "stanfordmovie.train.sentences.clean.dictionary.encoding.json")) as encoding_file:
-        encoding = json.load(encoding_file)
-
     evaluation_data_provider = LabelledDocumentMinibatchProvider(
         X=X,
         Y=Y,
-        batch_size=1,
+        batch_size=50,
         padding='PADDING',
         fixed_n_sentences=30,
         fixed_n_words=50)
 
-    model_file = "model_best.pkl"
-    with open(model_file) as model_file:
-        trained_model = gpu.model.dropout.remove_dropout(pickle.load(model_file))
+    model_file_path = args.model_file
+    with open(model_file_path) as model_file:
+            trained_model = gpu.model.dropout.remove_dropout(
+                gpu.model.host_device_component_mapping.move_to_gpu(
+                    pickle.load(model_file)))
 
     # PRINT USEFUL INFORMATION
     print evaluation_data_provider.batches_per_epoch
     print trained_model
 
-    time_start = time.time()
+    progress_bar = pyprind.ProgBar(evaluation_data_provider.batches_per_epoch)
 
-    #EVALUATING
-    X_valid, full_Y_valid, meta_valid = evaluation_data_provider.next_batch()
-    full_Y_hat = trained_model.fprop(X_valid, meta=meta_valid)
-    assert np.all(np.abs(full_Y_hat.sum(axis=1) - 1) < 1e-6)
+    ys = []
+    y_hats = []
+    for batch_index in xrange(evaluation_data_provider.batches_per_epoch):
+        x_batch, y_batch, meta_batch = evaluation_data_provider.next_batch()
+        y_hat_batch = trained_model.fprop(x_batch, meta=meta_batch)
 
-    for batch_index in xrange(0, evaluation_data_provider.batches_per_epoch-2):
-        X_valid, Y_valid, meta_valid = evaluation_data_provider.next_batch()
-        Y_hat = trained_model.fprop(X_valid, meta=meta_valid)
-        assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
+        ys.append(y_batch.get())
+        y_hats.append(y_hat_batch.get())
 
-        full_Y_valid = np.concatenate((full_Y_valid, Y_valid), axis=0)
-        full_Y_hat = np.concatenate((full_Y_hat, Y_hat), axis=0)
+        progress_bar.update()
 
-        if batch_index % 100 == 0:
-            acc = np.mean(np.argmax(full_Y_hat, axis=1) == np.argmax(full_Y_valid, axis=1))
-            print 'Batch: '+str(batch_index)+'/'+str(evaluation_data_provider.batches_per_epoch)+';  Accuracy so far: '+str(acc)
+    y = np.concatenate(ys, axis=0)
+    y_hat = np.concatenate(y_hats, axis=0)
 
-    time_end = time.time()
+    print y.shape
+    print y_hat.shape
 
-    acc = np.mean(np.argmax(full_Y_hat, axis=1) == np.argmax(full_Y_valid, axis=1))
-    print 'FINAL ACCURACY: '+str(acc)
-    print "Time elapsed: {}s".format(time_end - time_start)
+    acc = np.mean(np.argmax(y, axis=1) == np.argmax(y_hat, axis=1))
+
+    print acc
 
 
 if __name__ == "__main__":
