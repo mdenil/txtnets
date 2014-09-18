@@ -1,6 +1,7 @@
 venvs/
 data/
 results/
+.ipynb_checkpoints/
 .pkgs/
 .idea/
 cnn-sm-gpu-kmax
