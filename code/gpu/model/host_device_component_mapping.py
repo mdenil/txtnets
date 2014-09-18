@@ -8,6 +8,7 @@ import cpu.model.model
 import cpu.model.nonlinearity
 import cpu.model.pooling
 import cpu.model.transfer
+import cpu.model.repeat_layer
 import cpu.model.transport
 import cpu.model.dropout
 
@@ -18,6 +19,7 @@ import gpu.model.model
 import gpu.model.nonlinearity
 import gpu.model.pooling
 import gpu.model.transfer
+import gpu.model.repeat_layer
 import gpu.model.transport
 import gpu.model.dropout
 
@@ -45,6 +47,8 @@ __host_device_component_mapping = {
     cpu.model.transfer.Softmax: gpu.model.transfer.Softmax,
     cpu.model.transfer.AxisReduction: gpu.model.transfer.AxisReduction,
     cpu.model.transfer.ReshapeForDocuments: gpu.model.transfer.ReshapeForDocuments,
+
+    cpu.model.repeat_layer.RepeatLayer: gpu.model.repeat_layer.RepeatLayer,
 
     cpu.model.transport.HostToDevice: gpu.model.transport.HostToDevice,
     cpu.model.transport.DeviceToHost: gpu.model.transport.DeviceToHost,

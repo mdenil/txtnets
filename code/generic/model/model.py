@@ -78,7 +78,8 @@ class CSM(object):
             # this layer is yet.
             if layer_index < len(self.layers) - 1:
                 meta['space_above'] = meta['space_below']
-            del meta['space_below']
+            if 'space_below' in meta:
+                del meta['space_below']
 
             # layers should _not_ assume Y and delta are in the same space.  Y will be in the space they produced
             # (and they can store this space info in layer_fprop_state if they want),
