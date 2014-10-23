@@ -13,7 +13,7 @@ from nltk.tokenize import WordPunctTokenizer
 from nltk.tokenize.punkt import PunktSentenceTokenizer
 import random
 import string
-import cPickle as pickle
+from bs4 import BeautifulSoup
 
 from cpu.model.model import CSM
 from cpu.model.encoding import DictionaryEncoding
@@ -54,7 +54,7 @@ def create_jsons(input_file_name, output_file_names):
 
         with open(os.path.join(pos_dir, review_file_name)) as review_file:
             for review in review_file:
-                reviews.append([nltk.clean_html(review), ':)'])
+                reviews.append([BeautifulSoup(review).get_text(), ':)'])
 
     #Work on negative reviews and add them to reviews list
     for review_file_name in os.listdir(neg_dir):
@@ -63,7 +63,7 @@ def create_jsons(input_file_name, output_file_names):
 
         with open(os.path.join(neg_dir, review_file_name)) as review_file:
             for review in review_file:
-                reviews.append([nltk.clean_html(review), ':('])
+                reviews.append([BeautifulSoup(review).get_text(), ':('])
 
     random.shuffle(reviews)
 
@@ -85,7 +85,7 @@ def create_jsons(input_file_name, output_file_names):
 
         with open(os.path.join(pos_dir, review_file_name)) as review_file:
             for review in review_file:
-                reviews.append([nltk.clean_html(review), ':)'])
+                reviews.append([BeautifulSoup(review).get_text(), ':)'])
 
     #Work on negative reviews and add them to reviews list
     for review_file_name in os.listdir(neg_dir):
@@ -94,7 +94,7 @@ def create_jsons(input_file_name, output_file_names):
 
         with open(os.path.join(neg_dir, review_file_name)) as review_file:
             for review in review_file:
-                reviews.append([nltk.clean_html(review), ':('])
+                reviews.append([BeautifulSoup(review).get_text(), ':('])
 
     random.shuffle(reviews)
 
@@ -115,7 +115,7 @@ def create_jsons(input_file_name, output_file_names):
 
         with open(os.path.join(unsup_dir, review_file_name)) as review_file:
             for review in review_file:
-                reviews.append([nltk.clean_html(review), ':|'])
+                reviews.append([BeautifulSoup(review).get_text(), ':|'])
 
     random.shuffle(reviews)
 

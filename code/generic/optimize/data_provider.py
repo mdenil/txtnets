@@ -3,6 +3,10 @@ __author__ = 'mdenil, albandemiraj'
 import numpy as np
 
 import random
+import os
+import re
+import gzip
+import simplejson as json
 from collections import OrderedDict
 
 import cpu.space
@@ -297,3 +301,174 @@ class LabelledDocumentMinibatchProvider(object):
         else:
             #return x[:max_length]
             return x[0:max_length/2]+ x[max_length/2+len(x)-max_length:len(x)]
+
+
+class ShardedLabelledDocumentMinibatchProvider(object):
+    def __init__(
+            self,
+            shard_dir,
+            shard_pattern,
+            batch_size,
+            padding,
+            n_labels,
+            shuffle=True,
+            fixed_n_words=False,
+            fixed_n_sentences=False):
+
+        self.shard_dir = shard_dir
+        self.shard_pattern = shard_pattern
+        self.batch_size = batch_size
+        self.padding = padding
+        self.fixed_n_words = fixed_n_words
+        self.fixed_n_sentences = fixed_n_sentences
+        self.shuffle = shuffle
+        self.n_labels = n_labels
+
+        self.X_shard = None
+        self.Y_shard = None
+
+        self._example_index = 0
+        self._shard_index = 0
+        self._shard_file_names = self._load_shard_file_names()
+        self._load_next_shard()
+
+    def _load_shard_file_names(self):
+        shard_file_names = []
+
+        for file_name in os.listdir(self.shard_dir):
+            if re.match(self.shard_pattern, file_name):
+                shard_file_names.append(
+                    os.path.join(self.shard_dir, file_name))
+
+        if self.shuffle:
+            random.shuffle(shard_file_names)
+        else:
+            shard_file_names.sort()
+
+        return shard_file_names
+
+    @property
+    def n_shards(self):
+        return len(self._shard_file_names)
+
+    @property
+    def current_shard_size(self):
+        return len(self.X_shard)
+
+    def _load_next_shard(self):
+        self._example_index = 0
+        self._shard_index += 1
+
+        if self._shard_index >= self.n_shards:
+            self._shard_index = 0
+            random.shuffle(self._shard_file_names)
+
+        self.X_shard, self.Y_shard = self._load_shard(
+            self._shard_file_names[self._shard_index])
+
+    def _load_shard(self, file_name):
+        examples = []
+
+        with gzip.open(file_name) as shard_file:
+            for line in shard_file:
+                examples.append(json.loads(line))
+
+        if self.shuffle:
+            random.shuffle(examples)
+
+        return map(list, zip(*examples))
+
+    def next_batch(self):
+        X_batch, Y_batch = self._prepare_next_batch()
+
+        # Y_batch = np.equal.outer(
+        #     Y_batch, np.arange(self.n_labels)).astype(np.float32)
+        Y_batch = np.equal.outer(
+            np.asarray(Y_batch) > 2.5, np.arange(self.n_labels)).astype(np.float32)
+        assert not np.any(np.isnan(Y_batch))
+
+        n_documents = len(X_batch)
+
+        # number of sentences in each document
+        document_lengths = np.asarray(map(len, X_batch))
+
+        if self.fixed_n_sentences:
+            max_n_sentences = self.fixed_n_sentences
+            document_lengths = np.minimum(
+                document_lengths, self.fixed_n_sentences)
+        else:
+            max_n_sentences = int(document_lengths.max())
+
+        # pad documents
+        X_batch = [
+            self._pad_or_truncate_document(x, max_n_sentences)
+            for x in X_batch
+        ]
+
+        # flatten sentences to words
+        X_batch = [w for s in X_batch for w in s]
+
+        sentence_lengths = np.asarray(map(len, X_batch))
+
+        if self.fixed_n_words:
+            max_n_words = self.fixed_n_words
+            sentence_lengths = np.minimum(sentence_lengths, self.fixed_n_words)
+        else:
+            max_n_words = int(sentence_lengths.max())
+
+        # pad sentences
+        X_batch = [
+            self._pad_or_truncate_sentence(x, max_n_words)
+            for x in X_batch
+        ]
+
+        meta = {
+            'lengths': sentence_lengths,
+            'lengths2': document_lengths,
+            'padded_sentence_length': max_n_sentences,
+            'space_below': cpu.space.CPUSpace(
+                axes=('b', 'w'),
+                extents={
+                    'b': n_documents * max_n_sentences,
+                    'w': max_n_words,
+                }
+            )
+        }
+
+        return X_batch, Y_batch, meta
+
+
+    def _pad_or_truncate_document(self, x, max_length):
+        if max_length > len(x):
+            return x + [[self.padding]] * (max_length - len(x))
+        else:
+            return x[:max_length]
+
+    def _pad_or_truncate_sentence(self, x, max_length):
+        if max_length > len(x):
+            return x + [self.padding] * (max_length - len(x))
+        else:
+            return x[:max_length]
+
+    def _prepare_next_batch(self):
+        X_batch = []
+        Y_batch = []
+
+        while len(X_batch) < self.batch_size:
+            x, y = self._next_example()
+            X_batch.append(x)
+            Y_batch.append(y)
+
+        return X_batch, Y_batch
+
+
+    def _next_example(self):
+        if self._example_index > self.current_shard_size:
+            self._load_next_shard()
+
+        x = self.X_shard[self._example_index]
+        y = self.Y_shard[self._example_index]
+
+        self._example_index += 1
+
+        return x, y

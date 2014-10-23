@@ -180,53 +180,53 @@ def run():
             DictionaryEncoding(vocabulary=alphabet),
 
             WordEmbedding(
-                dimension=40,
+                dimension=60,
                 vocabulary_size=len(alphabet),
                 padding=alphabet['PADDING']),
 
             Dropout(('b', 'w', 'f'), 0.5),
 
             SentenceConvolution(
-                n_feature_maps=30,
+                n_feature_maps=6,
                 kernel_width=7,
-                n_channels=40,
+                n_channels=60,
                 n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=30),
+                n_feature_maps=6),
 
             KMaxPooling(k=4, k_dynamic=0.5),
 
             Tanh(),
 
             SentenceConvolution(
-                n_feature_maps=40,
+                n_feature_maps=14,
                 kernel_width=5,
-                n_channels=30,
+                n_channels=6,
                 n_input_dimensions=1),
 
             Bias(
                 n_input_dims=1,
-                n_feature_maps=40),
+                n_feature_maps=14),
 
             KMaxPooling(k=4),
 
             Tanh(),
 
-            Dropout(('b', 'd', 'f', 'w'), 0.5),
-
-            Linear(n_input=4*40, n_output=4*40),
-
-            Bias(
-                n_input_dims=4*40,
-                n_feature_maps=1),
+            # Dropout(('b', 'd', 'f', 'w'), 0.5),
+            #
+            # Linear(n_input=4*40, n_output=4*40),
+            #
+            # Bias(
+            #     n_input_dims=4*40,
+            #     n_feature_maps=1),
 
             Dropout(('b', 'd', 'f', 'w'), 0.5),
 
             Softmax(
                 n_classes=2,
-                n_input_dimensions=4*40),
+                n_input_dimensions=4*14),
             ]
     )
 
@@ -292,7 +292,7 @@ def run():
         regularizer=regularizer)
 
     update_rule = AdaGrad(
-        gamma=0.01,
+        gamma=0.1,
         model_template=tweet_model)
 
     # update_rule = AdaDelta(

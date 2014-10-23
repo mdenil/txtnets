@@ -395,7 +395,7 @@ if __name__ == "__main__":
 
             if acc > best_acc:
                 best_acc = acc
-                with open("model_best.pkl", 'w') as model_file:
+                with open(os.path.expanduser("~/model_best.pkl"), 'w') as model_file:
                     pickle.dump(model, model_file, protocol=-1)
 
             current = dict()
@@ -408,14 +408,14 @@ if __name__ == "__main__":
 
             progress.append(current)
             print current
-            with open("progress.pkl", 'w') as progress_file:
+            with open(os.path.expanduser("~/progress.pkl"), 'w') as progress_file:
                 pickle.dump(progress, progress_file, protocol=-1)
 
-        if batch_index == 100:
-            break
+        # if batch_index == 100:
+        #     break
 
         if batch_index % 100 == 0:
-            with open("model.pkl", 'w') as model_file:
+            with open(os.path.expanduser("~/model.pkl"), 'w') as model_file:
                 pickle.dump(model, model_file, protocol=-1)
 
     time_end = time.time()

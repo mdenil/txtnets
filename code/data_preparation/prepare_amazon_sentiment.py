@@ -107,7 +107,6 @@ def split_into_sentences(input_file_name, output_file_name):
         json.dump(tokenized_labelled_reviews, sentence_file)
         sentence_file.write("\n")
 
-@ruffus.split(split_into_sentences, )
 
 @ruffus.transform(split_into_sentences, ruffus.suffix(".json"), ".clean.json")
 def clean_data(input_file_name, output_file_name):
