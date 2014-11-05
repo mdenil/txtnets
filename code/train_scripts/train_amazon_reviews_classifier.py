@@ -10,22 +10,24 @@ import random
 import simplejson as json
 import cPickle as pickle
 
-from cpu.model.model import CSM
-from cpu.model.encoding import DictionaryEncoding
-from cpu.model.embedding import WordEmbedding
-from cpu.model.transfer import SentenceConvolution
-from cpu.model.transfer import Bias
-from cpu.model.pooling import KMaxPooling
-from cpu.model.transfer import ReshapeForDocuments
-from cpu.model.nonlinearity import Tanh
-from cpu.model.transfer import Softmax
-from cpu.model.dropout import Dropout
-from cpu.model.cost import CrossEntropy
-from cpu.optimize.objective import CostMinimizationObjective
-from cpu.optimize.regularizer import L2Regularizer
-from cpu.optimize.update_rule import AdaGrad
-from cpu.optimize.sgd import SGD
-from cpu.optimize.data_provider import ShardedLabelledDocumentMinibatchProvider
+from gpu.model.model import CSM
+from gpu.model.encoding import DictionaryEncoding
+from gpu.model.embedding import WordEmbedding
+from gpu.model.transfer import SentenceConvolution
+from gpu.model.transfer import Bias
+from gpu.model.pooling import KMaxPooling
+from gpu.model.transfer import ReshapeForDocuments
+from gpu.model.transfer import Linear
+from gpu.model.nonlinearity import Tanh
+from gpu.model.transfer import Softmax
+from gpu.model.dropout import Dropout
+from gpu.model.cost import CrossEntropy
+from gpu.model.cost import SquaredError
+from gpu.optimize.objective import CostMinimizationObjective
+from gpu.optimize.regularizer import L2Regularizer
+from gpu.optimize.update_rule import AdaGrad
+from gpu.optimize.sgd import SGD
+from gpu.optimize.data_provider import ShardedLabelledDocumentMinibatchProvider
 
 
 def load_word2vec_embeddings(file_name, encoding):
@@ -64,9 +66,9 @@ def main():
     np.random.seed(23421)
     np.set_printoptions(linewidth=100)
 
-    data_dir = os.path.join("/data/brown/mdenil/amazon-reviews", "shards")
+    data_dir = os.path.join("/data/mulga/mdenil/amazon-reviews", "shards")
 
-    batch_size = 25
+    batch_size = 100
 
     with open(os.path.join(data_dir, "dictionary.sentences.clean.encoding.json")) as encoding_file:
         encoding = json.load(encoding_file)
@@ -84,8 +86,8 @@ def main():
         shard_pattern="shard_[0-9]*.sentences.clean.projected.json.gz",
         batch_size=batch_size,
         padding='PADDING',
-        # n_labels=5,
-        n_labels=2,
+        n_labels=5,
+        # n_labels=2,
         fixed_n_sentences=15,
         fixed_n_words=25)
 
@@ -94,8 +96,8 @@ def main():
         shard_pattern="shard_[0-9]*.sentences.clean.projected.json.gz",
         batch_size=batch_size,
         padding='PADDING',
-        # n_labels=5,
-        n_labels=2,
+        n_labels=5,
+        # n_labels=2,
         fixed_n_sentences=15,
         fixed_n_words=25)
 
@@ -114,11 +116,11 @@ def main():
             #     padding=encoding['PADDING'],
             #     E=pretrained_lut),
 
-            Dropout(('b', 'w', 'f'), 0.2),
+            # Dropout(('b', 'w', 'f'), 0.2),
 
             SentenceConvolution(
                 n_feature_maps=10,
-                kernel_width=15,
+                kernel_width=3,
                 n_channels=30,
                 n_input_dimensions=1),
 
@@ -126,19 +128,19 @@ def main():
                 n_input_dims=1,
                 n_feature_maps=10),
 
-            KMaxPooling(k=7, k_dynamic=0.5),
-
-            Tanh(),
-
-            SentenceConvolution(
-                n_feature_maps=30,
-                kernel_width=9,
-                n_channels=10,
-                n_input_dimensions=1),
-
-            Bias(
-                n_input_dims=1,
-                n_feature_maps=30),
+            # KMaxPooling(k=7, k_dynamic=0.5),
+            #
+            # Tanh(),
+            #
+            # SentenceConvolution(
+            #     n_feature_maps=30,
+            #     kernel_width=3,
+            #     n_channels=10,
+            #     n_input_dimensions=1),
+            #
+            # Bias(
+            #     n_input_dims=1,
+            #     n_feature_maps=30),
 
             KMaxPooling(k=5),
 
@@ -148,8 +150,8 @@ def main():
 
             SentenceConvolution(
                 n_feature_maps=20,
-                kernel_width=11,
-                n_channels=30*5,
+                kernel_width=3,
+                n_channels=50,
                 n_input_dimensions=1),
 
             Bias(
@@ -160,18 +162,24 @@ def main():
 
             Tanh(),
 
-            Dropout(('b', 'd', 'f', 'w'), 0.5),
+            # Dropout(('b', 'd', 'f', 'w'), 0.5),
 
-            Softmax(
-                n_classes=2,
-                n_input_dimensions=100),
+            # Softmax(
+            #     # n_classes=2,
+            #     n_classes=5,
+            #     n_input_dimensions=100),
+
+            Linear(
+                n_input=100,
+                n_output=1)
             ]
     )
 
     print(model)
 
 
-    cost_function = CrossEntropy()
+    # cost_function = CrossEntropy()
+    cost_function = SquaredError()
 
     regularizer = L2Regularizer(lamb=1e-5)
 
@@ -181,7 +189,7 @@ def main():
         regularizer=regularizer)
 
     update_rule = AdaGrad(
-        gamma=0.01,
+        gamma=0.1,
         model_template=model)
 
     optimizer = SGD(
@@ -211,21 +219,24 @@ def main():
                 X_valid_batch, Y_valid_batch, meta_valid = validation_data_provider.next_batch()
                 Y_valid.append(Y_valid_batch)
                 Y_hat.append(model.fprop(X_valid_batch, meta=meta_valid))
-            Y_valid = np.concatenate(Y_valid, axis=0)
-            Y_hat = np.concatenate(Y_hat, axis=0)
-            assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
+            Y_valid = Y_valid[0].get()
+            Y_hat = Y_hat[0].get()
+            # Y_valid = np.concatenate(Y_valid, axis=0)
+            # Y_hat = np.concatenate(Y_hat, axis=0)
+            # assert np.all(np.abs(Y_hat.sum(axis=1) - 1) < 1e-6)
 
-            acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid, axis=1))
+            # acc = np.mean(np.argmax(Y_hat, axis=1) == np.argmax(Y_valid, axis=1))
+            acc = np.mean(np.abs(Y_valid - Y_hat))
 
             # if acc > best_acc:
             #     best_acc = acc
-            with open("/home/mdenil/model.pkl", 'w') as model_file:
-                pickle.dump(model, model_file, protocol=-1)
+            # with open("/home/mdenil/model.pkl", 'w') as model_file:
+            #     pickle.dump(model, model_file, protocol=-1)
 
             current = dict()
             current['B']=batch_index
             current['A']=acc
-            current['C']=costs[-1]
+            current['C']=costs[-1].get()
             current['Prop']=np.argmax(Y_hat, axis=1).mean()
             current['Params']=np.mean(np.abs(model.pack()))
 
