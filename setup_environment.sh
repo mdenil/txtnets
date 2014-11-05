@@ -120,6 +120,8 @@ safe_call conda_install pandas
 safe_call conda_install beautiful-soup
 safe_call conda_install requests
 safe_call conda_install statsmodels patsy
+safe_call conda_install cython
+safe_call conda_install gensim
 #safe_call conda_install -c https://conda.binstar.org/richli fftw
 #safe_call conda_install -c https://conda.binstar.org/richli pyfftw
 safe_call pip_install pyfftw
@@ -130,7 +132,7 @@ safe_call pip_install sh
 safe_call pip_install simplejson
 safe_call pip_install seaborn
 #safe_call install_cld2
-safe_call install_word2vec
+#safe_call install_word2vec # included in gensim
 
 if [ "$1" == "--cuda" ]; then
     safe_call install_pycuda
