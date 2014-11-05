@@ -361,7 +361,8 @@ class ShardedLabelledDocumentMinibatchProvider(object):
 
         if self._shard_index >= self.n_shards:
             self._shard_index = 0
-            random.shuffle(self._shard_file_names)
+            if self.shuffle:
+                random.shuffle(self._shard_file_names)
 
         self.X_shard, self.Y_shard = self._load_shard(
             self._shard_file_names[self._shard_index])
@@ -381,10 +382,15 @@ class ShardedLabelledDocumentMinibatchProvider(object):
     def next_batch(self):
         X_batch, Y_batch = self._prepare_next_batch()
 
+
+        Y_batch = np.asarray(Y_batch).reshape((-1,1)).astype(np.float32)
+
         # Y_batch = np.equal.outer(
         #     Y_batch, np.arange(self.n_labels)).astype(np.float32)
-        Y_batch = np.equal.outer(
-            np.asarray(Y_batch) > 2.5, np.arange(self.n_labels)).astype(np.float32)
+        # HACK: make the task binary
+        # Y_batch = np.equal.outer(
+        #     np.asarray(Y_batch) > 2.5, np.arange(self.n_labels)).astype(np.float32)
+
         assert not np.any(np.isnan(Y_batch))
 
         n_documents = len(X_batch)
@@ -463,7 +469,7 @@ class ShardedLabelledDocumentMinibatchProvider(object):
 
 
     def _next_example(self):
-        if self._example_index > self.current_shard_size:
+        if self._example_index >= self.current_shard_size:
             self._load_next_shard()
 
         x = self.X_shard[self._example_index]

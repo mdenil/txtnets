@@ -96,3 +96,9 @@ class PaddedParallelSequenceMinibatchProvider(
             meta2['space_below'].extents)
 
         return X1_batch, meta1, X2_batch, meta2
+
+
+class ShardedLabelledDocumentMinibatchProvider(
+    TransferLabelsToGPU,
+    generic.optimize.data_provider.ShardedLabelledDocumentMinibatchProvider):
+    pass
