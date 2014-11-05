@@ -215,6 +215,16 @@ def clean_data(input_file_name, output_file_name):
         output_file.write("\n")
 
 
+# These files can be used as input to word2vec
+@ruffus.transform(clean_data, ruffus.suffix(".json"), ".txt")
+def make_clean_txt_files(input_file_name, output_file_name):
+    with open(input_file_name) as input_file, open(output_file_name, 'w') as output_file:
+        for sentences, label in json.load(input_file):
+            for sentence in sentences:
+                output_file.write(" ".join(sentence))
+                output_file.write("\n")
+
+
 @ruffus.transform(
     clean_data,
     ruffus.suffix(".json"), ".dictionary.json")

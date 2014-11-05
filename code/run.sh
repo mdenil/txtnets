@@ -7,6 +7,7 @@ PLATFORM="$(uname)"
 LOCAL_TAG="$PLATFORM"
 EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
 LIB="$ROOT/venvs/$LOCAL_TAG/lib"
+BIN="$ROOT/venvs/$LOCAL_TAG/bin"
 ENV="$ROOT/venvs/$LOCAL_TAG/env"
 
 
@@ -35,6 +36,8 @@ export DYLD_LIBRARY_PATH="$LIB:$DYLD_LIBRARY_PATH" # for osx
 
 TOOL_NAME="$1";
 TOOL_PARAMS="${@:2}"
+
+TOOL_PATH="$TOOL_PATH:$BIN"
 
 TOOL=""
 for D in ${TOOL_PATH//:/ }; do

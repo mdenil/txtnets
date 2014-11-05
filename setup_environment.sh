@@ -9,6 +9,7 @@ PLATFORM="$(uname)"
 LOCAL_TAG="$PLATFORM"
 EXTERNAL="$ROOT/venvs/$LOCAL_TAG/external"
 LIB="$ROOT/venvs/$LOCAL_TAG/lib"
+BIN="$ROOT/venvs/$LOCAL_TAG/bin"
 ENV="$ROOT/venvs/$LOCAL_TAG/env"
 
 function safe_call {
@@ -53,6 +54,16 @@ function install_cld2 {
     python setup_full.py install
 }
 
+function install_word2vec {
+    cd "$EXTERNAL"
+
+    svn checkout http://word2vec.googlecode.com/svn/trunk/ word2vec
+    cd word2vec
+    make
+
+    cp word2vec "$BIN/."
+}
+
 function install_pycuda {
     cd "$EXTERNAL"
 
@@ -88,6 +99,7 @@ function install_reikna {
 
 mkdir -p "$EXTERNAL"
 mkdir -p "$LIB"
+mkdir -p "$BIN"
 mkdir -p "$DATA"
 mkdir -p "$RESULTS"
 
@@ -118,6 +130,7 @@ safe_call pip_install sh
 safe_call pip_install simplejson
 safe_call pip_install seaborn
 #safe_call install_cld2
+safe_call install_word2vec
 
 if [ "$1" == "--cuda" ]; then
     safe_call install_pycuda
