@@ -42,6 +42,30 @@ class CrossEntropy(object):
             self.__class__.__name__)
 
 
+class SquaredError(object):
+    def fprop(self, Y, Y_true, meta):
+        if not Y.shape == Y_true.shape:
+            raise ValueError("Shape of predictions and labels do not match. (Y={}, Y_true={})".format(Y.shape, Y_true.shape))
+
+        out = 0.5 * np.sum((Y - Y_true)**2, axis=1).mean()
+
+        fprop_state = {}
+        fprop_state['input_space'] = meta['space_below']
+
+        return out, meta, fprop_state
+
+    def bprop(self, Y, Y_true, meta, fprop_state):
+        if not Y.shape == Y_true.shape:
+            raise ValueError("Shape of predictions and labels do not match. (Y={}, Y_true={})".format(Y.shape, Y_true.shape))
+
+        delta = Y - Y_true
+        delta /= Y_true.shape[0]
+
+        meta['space_below'] = fprop_state['input_space']
+        assert meta['space_below'].is_compatible_shape(delta)
+        return delta, meta
+
+
 # TODO: I think this is old and useless
 class LargeMarginCost(object):
     def __init__(self, margin):
