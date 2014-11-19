@@ -37,7 +37,7 @@ export DYLD_LIBRARY_PATH="$LIB:$DYLD_LIBRARY_PATH" # for osx
 TOOL_NAME="$1";
 TOOL_PARAMS="${@:2}"
 
-TOOL_PATH="$TOOL_PATH:$BIN"
+export PATH="$BIN:$PATH"
 
 TOOL=""
 for D in ${TOOL_PATH//:/ }; do

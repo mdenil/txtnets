@@ -290,18 +290,23 @@ class LabelledDocumentMinibatchProvider(object):
         self.X, self.Y = map(list, zip(*combined))
 
     def _pad_or_truncate_sentences(self, x, max_length):
-        if max_length > len(x):
-            return x + [self.padding] * (max_length - len(x))
+        if self.padding:
+            if max_length > len(x):
+                return x + [self.padding] * (max_length - len(x))
+            else:
+                return x[:max_length]
         else:
-            return x[:max_length]
+            return x
 
     def _pad_or_truncate_document(self, x, max_length):
-        if max_length > len(x):
-            return x + [['PADDING']] * (max_length - len(x))
+        if self.padding:
+            if max_length > len(x):
+                return x + [['PADDING']] * (max_length - len(x))
+            else:
+                #return x[:max_length]
+                return x[0:max_length/2]+ x[max_length/2+len(x)-max_length:len(x)]
         else:
-            #return x[:max_length]
-            return x[0:max_length/2]+ x[max_length/2+len(x)-max_length:len(x)]
-
+            return x
 
 class ShardedLabelledDocumentMinibatchProvider(object):
     def __init__(
@@ -478,3 +483,23 @@ class ShardedLabelledDocumentMinibatchProvider(object):
         self._example_index += 1
 
         return x, y
+
+
+
+class TransformedLabelledDataProvider(object):
+    def __init__(self, data_source, transformer):
+        self.data_source = data_source
+        self.transformer = transformer
+
+    def next_batch(self):
+        x_batch, y_batch, meta = self.data_source.next_batch()
+        x_batch, meta, fprop_state = self.transformer.fprop(
+            x_batch, meta=dict(meta), return_state=True)
+
+        meta['space_below'] = meta['space_above']
+
+        return x_batch, y_batch, meta
+
+    @property
+    def batches_per_epoch(self):
+        return self.data_source.batches_per_epoch

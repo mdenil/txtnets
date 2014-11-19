@@ -17,7 +17,8 @@ class DictionaryEncoding(object):
         return X, meta, fprop_state
 
     def _encode(self, x):
-        return [self.vocabulary[c] for c in x]
+        # return [self.vocabulary[c] for c in x]
+        return [self.vocabulary.get(c, self.vocabulary['UNKNOWN']) for c in x]
 
     def __repr__(self):
         return "{}(vocabulary_size={})".format(

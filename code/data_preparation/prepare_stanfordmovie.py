@@ -215,16 +215,6 @@ def clean_data(input_file_name, output_file_name):
         output_file.write("\n")
 
 
-# These files can be used as input to word2vec
-@ruffus.transform(clean_data, ruffus.suffix(".json"), ".txt")
-def make_clean_txt_files(input_file_name, output_file_name):
-    with open(input_file_name) as input_file, open(output_file_name, 'w') as output_file:
-        for sentences, label in json.load(input_file):
-            for sentence in sentences:
-                output_file.write(" ".join(sentence))
-                output_file.write("\n")
-
-
 @ruffus.transform(
     clean_data,
     ruffus.suffix(".json"), ".dictionary.json")
@@ -271,6 +261,30 @@ def project_sentences(input_file_names, output_file_name):
 
     with open(output_file_name, 'w') as output_file:
         json.dump(projected_reviews, output_file)
+        output_file.write("\n")
+
+
+
+# These files can be used as input to word2vec
+@ruffus.transform(project_sentences, ruffus.suffix(".json"), ".txt")
+def make_sentence_txt_files(input_file_name, output_file_name):
+    with open(input_file_name) as input_file, open(output_file_name, 'w') as output_file:
+        for sentences, label in json.load(input_file):
+            for sentence in sentences:
+                output_file.write(" ".join(sentence))
+                output_file.write("\n")
+
+
+@ruffus.transform(project_sentences, ruffus.suffix(".json"), ".flat.json")
+def make_flat_document_json_files(input_file_name, output_file_name):
+    flat_documents = []
+    with open(input_file_name) as input_file:
+        for sentences, label in json.load(input_file):
+            flat_document = [w for s in sentences for w in s]
+            flat_documents.append([flat_document, label])
+
+    with open(output_file_name, 'w') as output_file:
+        json.dump(flat_documents, output_file)
         output_file.write("\n")
 
 

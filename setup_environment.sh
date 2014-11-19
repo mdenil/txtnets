@@ -132,7 +132,7 @@ safe_call pip_install sh
 safe_call pip_install simplejson
 safe_call pip_install seaborn
 #safe_call install_cld2
-#safe_call install_word2vec # included in gensim
+safe_call install_word2vec
 
 if [ "$1" == "--cuda" ]; then
     safe_call install_pycuda

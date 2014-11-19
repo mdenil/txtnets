@@ -67,6 +67,51 @@ class Linear(object):
             self.W.shape)
 
 
+class Sum(object):
+    def __init__(self, axes):
+        self.axes = axes
+
+    def fprop(self, X, meta):
+        working_space = meta['space_below']
+
+        fprop_state = {}
+
+        fprop_state['axes_below'] = working_space.axes
+        fprop_state['lengths_below'] = meta['lengths']
+
+        X = working_space.fold(X)
+        working_space = working_space.folded()
+
+        for ax in self.axes:
+            assert(ax in working_space.axes)
+
+        fprop_state['broadcast'] = {
+            ax: working_space.get_extent(ax) for ax in self.axes
+        }
+
+        axes_indexes = tuple(working_space.axes.index(ax) for ax in self.axes)
+
+        Y = np.sum(X, axis=axes_indexes)
+        working_space = working_space.without_axes(self.axes)
+
+        meta['space_above'] = working_space
+        meta['lengths'] = np.ones_like(meta['lengths'])
+
+        return Y, meta, fprop_state
+
+    def bprop(self, delta, meta, fprop_state):
+
+        delta, delta_space = meta['space_above'].transform(
+            delta,
+            fprop_state['axes_below'],
+            **fprop_state['broadcast'])
+
+        meta['space_below'] = delta_space
+        meta['lengths'] = fprop_state['lengths_below']
+
+        return delta, meta
+
+
 class Softmax(object):
     def __init__(self,
                  n_classes,

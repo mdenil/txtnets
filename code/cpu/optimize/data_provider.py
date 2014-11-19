@@ -38,6 +38,10 @@ class ShardedLabelledDocumentMinibatchProvider(
         generic.optimize.data_provider.ShardedLabelledDocumentMinibatchProvider):
     pass
 
+class TransformedLabelledDataProvider(
+        generic.optimize.data_provider.TransformedLabelledDataProvider):
+    pass
+
 
 class MinibatchDataProvider(object):
     def __init__(self, X, Y, lengths, batch_size):

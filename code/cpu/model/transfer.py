@@ -22,6 +22,10 @@ class Linear(generic.model.transfer.Linear, layer.Layer):
         return [np.dot(X.T, delta)]
 
 
+class Sum(generic.model.transfer.Sum, layer.Layer):
+    pass
+
+
 class Softmax(generic.model.transfer.Softmax, layer.Layer):
 
     def _fprop(self, X, X_space):
