@@ -105,7 +105,7 @@ mkdir -p "$RESULTS"
 
 export LD_LIBRARY_PATH="$LIB"
 
-conda create --yes --prefix "$ENV" python pip
+conda create --yes --prefix "$ENV" python=2.7 pip
 source activate "$ENV"
 
 # you also need to install fftw
