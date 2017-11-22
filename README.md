@@ -3,6 +3,11 @@ txtnets
 
 A convolutional neural network library for NLP.
 
+This library is not actively maintained. YMMV.
+
+Installation
+------------
+
 Requires [anaconda](https://store.continuum.io/cshop/anaconda/).
 
 Run `./setup_environment.sh` to install a virtualenv with the dependnecies.  If you have a gpu run `./setup_environment --cuda` instead.
