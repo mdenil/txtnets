@@ -9,6 +9,7 @@ Run `./setup_environment.sh` to install a virtualenv with the dependnecies.  If 
 
 Run scripts in `code/` and its subdirectories with `./run.sh script.py args go here`.
 
+You need fftw installed before running `setup_environment.sh`, eg `sudo apt-get install libfftw3-dev libfftw3-doc`.
 
 This code was used for the experiments in
 
